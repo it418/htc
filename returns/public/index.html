@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <title>Equipment Return (Admin)</title>
+  <style>
+    :root{
+      --bg1:#0b1220; --bg2:#0f172a;
+      --card:#ffffff; --muted:#64748b; --text:#0f172a;
+      --border:#e2e8f0; --pri:#2563eb; --pri2:#1d4ed8;
+      --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444;
+      --radius:16px;
+      --font:'Kanit', sans-serif;
+    }
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--font);
+      background:
+        radial-gradient(1000px 600px at 10% 10%, rgba(37,99,235,0.35), transparent 60%),
+        radial-gradient(1000px 600px at 90% 30%, rgba(16,185,129,0.22), transparent 60%),
+        linear-gradient(180deg, var(--bg1), var(--bg2));
+      color:var(--text);
+    }
+    .wrap{max-width:1180px;margin:0 auto;padding:22px}
+    .top{
+      display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{
+      width:44px;height:44px;border-radius:14px;
+      background:rgba(255,255,255,0.15);
+      border:1px solid rgba(255,255,255,0.18);
+      display:flex;align-items:center;justify-content:center;
+      color:#fff;font-weight:700;
+      backdrop-filter: blur(8px);
+    }
+    .title{color:#fff;font-size:20px;font-weight:600;line-height:1.2}
+    .subtitle{color:rgba(255,255,255,.75);font-size:12px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{
+      border:none;cursor:pointer;border-radius:12px;padding:10px 12px;font-family:var(--font);
+      font-weight:500;display:inline-flex;gap:8px;align-items:center;
+      background:rgba(255,255,255,0.16);color:#fff;border:1px solid rgba(255,255,255,0.18);
+      backdrop-filter: blur(8px);
+    }
+    .btn.primary{background:var(--pri);border-color:rgba(255,255,255,0); }
+    .btn.primary:hover{background:var(--pri2)}
+    .btn.danger{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.35)}
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .panel{
+      background:rgba(255,255,255,0.85);
+      border:1px solid rgba(255,255,255,0.35);
+      box-shadow:0 20px 60px rgba(2,6,23,.22);
+      border-radius:18px;
+      overflow:hidden;
+    }
+    .panel-head{
+      padding:16px 18px;
+      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      border-bottom:1px solid rgba(226,232,240,.8);
+      background:rgba(255,255,255,0.7);
+    }
+    .panel-head h3{margin:0;font-size:16px}
+    .panel-head .muted{color:var(--muted);font-size:12px}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;padding:14px}
+    .card{
+      background:#fff;border:1px solid var(--border);border-radius:var(--radius);
+      padding:14px;box-shadow:0 6px 18px rgba(2,6,23,.06);
+    }
+    .span-12{grid-column:span 12}
+    .span-6{grid-column:span 6}
+    .span-4{grid-column:span 4}
+    .span-3{grid-column:span 3}
+    @media (max-width: 980px){
+      .span-6,.span-4,.span-3{grid-column:span 12}
+      .wrap{padding:14px}
+    }
+    .kpi{display:flex;align-items:center;justify-content:space-between}
+    .kpi .num{font-size:26px;font-weight:700}
+    .kpi .label{color:var(--muted);font-size:12px}
+    .pill{padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:#f8fafc;color:#334155}
+    .pill.ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+    .pill.warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+    .pill.bad{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+
+    label{display:block;color:var(--muted);font-size:12px;margin:10px 0 6px}
+    input,select,textarea{
+      width:100%;box-sizing:border-box;
+      border:1px solid var(--border);border-radius:12px;
+      padding:10px 12px;font-family:var(--font);
+      background:#fff;
+    }
+    textarea{resize:vertical;min-height:88px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .row > *{flex:1;min-width:220px}
+    table{width:100%;border-collapse:separate;border-spacing:0 10px}
+    th{color:var(--muted);font-weight:500;text-align:left;font-size:12px;padding:0 10px}
+    td{background:#fff;border:1px solid var(--border);padding:12px 10px}
+    tr td:first-child{border-top-left-radius:12px;border-bottom-left-radius:12px}
+    tr td:last-child{border-top-right-radius:12px;border-bottom-right-radius:12px}
+    tr:hover td{border-color:#93c5fd;background:#eff6ff}
+    .small{font-size:12px}
+    .link{color:#2563eb;text-decoration:none}
+    .inline-select{border:1px solid var(--border);border-radius:10px;padding:6px 8px;font-family:var(--font);cursor:pointer;background:#fff}
+    .muted{color:var(--muted)}
+    .hr{height:1px;background:rgba(226,232,240,.9);margin:12px 0}
+    canvas{width:100%;height:260px;border:1px dashed rgba(148,163,184,.55);border-radius:14px;background:#f8fafc}
+    .toast{position:fixed;right:18px;bottom:18px;z-index:99;display:flex;flex-direction:column;gap:10px}
+    .toast .t{background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px 12px;box-shadow:0 12px 30px rgba(2,6,23,.15);max-width:360px}
+    .overlay{position:fixed;inset:0;background:rgba(2,6,23,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:90}
+    .overlay.show{display:flex}
+    .modal{width:min(980px,100%);background:#fff;border-radius:18px;overflow:hidden;max-height:92vh;display:flex;flex-direction:column}
+    .modal-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .modal-body{padding:14px 18px;overflow:auto}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo">↩</div>
+        <div>
+          <div class="title">Equipment Return</div>
+          <div class="subtitle">Admin only • บันทึกการคืนอุปกรณ์ + Dashboard กราฟ + Export Excel (รายละเอียดครบ)</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" onclick="goPortal()">Portal</button>
+        <button class="btn" onclick="goIt()">IT Tickets</button>
+        <button class="btn primary" id="btnExport" onclick="exportExcel()">Export Excel</button>
+        <button class="btn danger" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h3>ภาพรวมการคืนอุปกรณ์</h3>
+          <div class="muted" id="who">กำลังตรวจสอบสิทธิ์...</div>
+        </div>
+        <div class="row" style="gap:8px;align-items:center;justify-content:flex-end">
+          <select id="filterStatus" class="inline-select" style="min-width:180px" onchange="reloadAll()">
+            <option value="">All Status</option>
+            <option value="PENDING">PENDING</option>
+            <option value="RECEIVED">RECEIVED</option>
+            <option value="COMPLETED">COMPLETED</option>
+            <option value="CANCELLED">CANCELLED</option>
+          </select>
+          <input id="filterQ" placeholder="ค้นหา asset / item / serial / returner / dept" style="min-width:260px" onkeydown="if(event.key==='Enter') reloadAll()">
+          <button class="btn" onclick="reloadAll()">Refresh</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card span-3">
+          <div class="kpi">
+            <div>
+              <div class="label">Total</div>
+              <div class="num" id="kTotal">-</div>
+            </div>
+            <div class="pill">All</div>
+          </div>
+        </div>
+        <div class="card span-3">
+          <div class="kpi">
+            <div>
+              <div class="label">Pending</div>
+              <div class="num" id="kPending">-</div>
+            </div>
+            <div class="pill warn">PENDING</div>
+          </div>
+        </div>
+        <div class="card span-3">
+          <div class="kpi">
+            <div>
+              <div class="label">Received</div>
+              <div class="num" id="kReceived">-</div>
+            </div>
+            <div class="pill ok">RECEIVED</div>
+          </div>
+        </div>
+        <div class="card span-3">
+          <div class="kpi">
+            <div>
+              <div class="label">Completed</div>
+              <div class="num" id="kCompleted">-</div>
+            </div>
+            <div class="pill ok">COMPLETED</div>
+          </div>
+        </div>
+
+        <div class="card span-6">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:600">By Status</div>
+              <div class="muted small">จำนวนรายการตามสถานะ</div>
+            </div>
+            <div class="muted small">อัปเดต: <span id="lastUpdate">-</span></div>
+          </div>
+          <div class="hr"></div>
+          <canvas id="chartStatus" width="700" height="260"></canvas>
+        </div>
+
+        <div class="card span-6">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:600">Trend (30 days)</div>
+              <div class="muted small">จำนวนการคืนต่อวัน</div>
+            </div>
+            <select id="days" class="inline-select" style="min-width:140px" onchange="reloadAll()">
+              <option value="7">7 days</option>
+              <option value="14">14 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="60">60 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+          <div class="hr"></div>
+          <canvas id="chartTrend" width="700" height="260"></canvas>
+        </div>
+
+        <div class="card span-12">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:600">บันทึกรายการคืนอุปกรณ์</div>
+              <div class="muted small">กรอกให้ครบเพื่อ Export รายงานได้ละเอียด</div>
+            </div>
+            <div class="muted small">* Admin only</div>
+          </div>
+          <div class="hr"></div>
+
+          <div class="row">
+            <div>
+              <label>Asset Tag</label>
+              <input id="fAsset" placeholder="เช่น ASSET-001 (optional)">
+            </div>
+            <div>
+              <label>Item Name</label>
+              <input id="fItem" placeholder="เช่น MacBook Pro (optional)">
+            </div>
+            <div>
+              <label>Serial No</label>
+              <input id="fSerial" placeholder="Serial (optional)">
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Condition</label>
+              <select id="fCond">
+                <option value="">(optional)</option>
+                <option>Good</option>
+                <option>Fair</option>
+                <option>Damaged</option>
+                <option>Missing parts</option>
+              </select>
+            </div>
+            <div>
+              <label>Condition detail</label>
+              <input id="fCondDetail" placeholder="รายละเอียดเพิ่มเติม เช่น รอยแตก/คีย์บอร์ดเสีย/แบตเสื่อม">
+            </div>
+            <div>
+              <label>Accessories</label>
+              <input id="fAccessories" placeholder="เช่น Adapter, Cable, Bag, Mouse">
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Returner name</label>
+              <input id="fRName" placeholder="ชื่อผู้คืนอุปกรณ์">
+            </div>
+            <div>
+              <label>Returner email</label>
+              <input id="fREmail" placeholder="อีเมลผู้คืน (optional)">
+            </div>
+            <div>
+              <label>Department</label>
+              <input id="fDept" placeholder="แผนก (optional)">
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Location</label>
+              <input id="fLoc" placeholder="สถานที่รับคืน/จุดรับคืน (optional)">
+            </div>
+            <div>
+              <label>Attachment link (optional)</label>
+              <input id="fLink" placeholder="วางลิงก์รูป/ไฟล์ https://...">
+            </div>
+          </div>
+
+          <label>Reason / Notes</label>
+          <textarea id="fReason" placeholder="รายละเอียดการคืน / ปัญหา / สิ่งที่ต้องตรวจเช็ค"></textarea>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+            <div class="muted" id="formMsg"></div>
+            <button class="btn primary" onclick="createReturn()">Save Return</button>
+          </div>
+        </div>
+
+        <div class="card span-12">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:600">รายการคืนอุปกรณ์</div>
+              <div class="muted small" id="countLabel">-</div>
+            </div>
+            <div class="muted small">Tip: คลิกแถวเพื่อดูรายละเอียด/แก้ไข</div>
+          </div>
+          <div class="hr"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width:70px">ID</th>
+                <th>Item</th>
+                <th style="width:150px">Status</th>
+                <th style="width:180px">Returner</th>
+                <th style="width:160px">Created</th>
+                <th style="width:120px">Action</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+
+          <div id="empty" class="muted" style="display:none;padding:16px;border:1px dashed var(--border);border-radius:14px;background:#f8fafc">
+            ยังไม่มีรายการคืนอุปกรณ์
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="modal" onclick="if(event.target===this) closeModal()">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div style="font-weight:700">Return #<span id="mId"></span></div>
+          <div class="muted small" id="mSub">-</div>
+        </div>
+        <button class="btn" onclick="closeModal()">Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div><label>Status</label>
+            <select id="mStatus">
+              <option>PENDING</option>
+              <option>RECEIVED</option>
+              <option>COMPLETED</option>
+              <option>CANCELLED</option>
+            </select>
+          </div>
+          <div><label>Received at</label><input id="mReceived" placeholder="YYYY-MM-DD HH:MM (optional)"></div>
+          <div><label>Completed at</label><input id="mCompleted" placeholder="YYYY-MM-DD HH:MM (optional)"></div>
+        </div>
+
+        <div class="row">
+          <div><label>Asset Tag</label><input id="mAsset"></div>
+          <div><label>Item</label><input id="mItem"></div>
+          <div><label>Serial</label><input id="mSerial"></div>
+        </div>
+
+        <div class="row">
+          <div><label>Condition</label>
+            <select id="mCond">
+              <option value="">(optional)</option>
+              <option>Good</option>
+              <option>Fair</option>
+              <option>Damaged</option>
+              <option>Missing parts</option>
+            </select>
+          </div>
+          <div><label>Condition detail</label><input id="mCondDetail"></div>
+          <div><label>Accessories</label><input id="mAccessories"></div>
+        </div>
+
+        <div class="row">
+          <div><label>Returner name</label><input id="mRName"></div>
+          <div><label>Returner email</label><input id="mREmail"></div>
+          <div><label>Department</label><input id="mDept"></div>
+        </div>
+
+        <div class="row">
+          <div><label>Location</label><input id="mLoc"></div>
+          <div><label>Attachment link</label><input id="mLink"></div>
+        </div>
+
+        <label>Reason / Notes</label>
+        <textarea id="mReason"></textarea>
+
+        <label>Admin notes</label>
+        <textarea id="mAdminNotes" placeholder="โน้ตสำหรับฝ่าย IT/ผู้รับคืน"></textarea>
+
+        <div class="hr"></div>
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+          <div class="muted small" id="mMeta">-</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" onclick="saveModal()">Save</button>
+            <button class="btn danger" onclick="deleteModal()">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = "/it/api";
+    const token = localStorage.getItem("token") || "";
+    let me = null;
+    let rows = [];
+    let currentId = null;
+
+    function qs(id){ return document.getElementById(id); }
+    function toast(msg, type="info"){
+      const el = document.createElement("div");
+      el.className = "t";
+      el.innerHTML = `<div style="font-weight:600;margin-bottom:2px">${type==="danger"?"Error":type==="ok"?"OK":"Info"}</div><div class="small">${msg}</div>`;
+      qs("toast").appendChild(el);
+      setTimeout(()=>{ el.remove(); }, 4200);
+    }
+
+    function goPortal(){ location.href = "/"; }
+    function goIt(){ location.href = "/it/app.html"; }
+    function logout(){ localStorage.removeItem("token"); location.href = "/"; }
+
+    async function apiJson(path, opts={}){
+      const r = await fetch(API + path, {
+        ...opts,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token,
+          ...(opts.headers || {})
+        }
+      });
+      const t = await r.text();
+      let j = null;
+      try{ j = JSON.parse(t); }catch{ j = { error: t || "Server error" }; }
+      if(!r.ok) throw new Error(j.error || j.message || "Request failed");
+      return j;
+    }
+
+    async function init(){
+      if(!token){
+        location.href = "/it/login.html?adminonly=1&next=/returns/index.html";
+        return;
+      }
+      try{
+        const j = await apiJson("/me", { method:"GET", headers: {"Content-Type":"application/json"} });
+        me = j.user;
+        if(!me || me.role !== "admin"){
+          qs("who").innerText = "Forbidden: หน้านี้สำหรับ Admin เท่านั้น";
+          toast("หน้านี้สำหรับ Admin เท่านั้น", "danger");
+          setTimeout(()=>location.href="/it/app.html", 1200);
+          return;
+        }
+        qs("who").innerText = `Signed in as ${me.name} (${me.role})`;
+        await reloadAll();
+      }catch(e){
+        qs("who").innerText = "Session error: กรุณา login ใหม่";
+        toast(e.message || String(e), "danger");
+        localStorage.removeItem("token");
+        setTimeout(()=>location.href="/it/login.html?adminonly=1&next=/returns/index.html", 900);
+      }
+    }
+
+    function drawBar(canvas, labels, data){
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0,0,W,H);
+      const pad = 40;
+      const max = Math.max(1, ...data);
+      // axes
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "12px Kanit";
+      ctx.strokeStyle = "rgba(148,163,184,.7)";
+      ctx.beginPath();
+      ctx.moveTo(pad, 10);
+      ctx.lineTo(pad, H-pad);
+      ctx.lineTo(W-10, H-pad);
+      ctx.stroke();
+
+      const barW = (W - pad - 20) / Math.max(1, data.length);
+      for(let i=0;i<data.length;i++){
+        const v = data[i];
+        const h = (H - pad - 20) * (v/max);
+        const x = pad + i*barW + 8;
+        const y = (H - pad) - h;
+        ctx.fillStyle = "rgba(37,99,235,.65)";
+        ctx.fillRect(x, y, Math.max(10, barW-16), h);
+
+        ctx.fillStyle = "#0f172a";
+        ctx.fillText(String(v), x, y-6);
+        ctx.fillStyle = "#64748b";
+        ctx.fillText(labels[i], x, H-pad+18);
+      }
+    }
+
+    function drawLine(canvas, labels, data){
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0,0,W,H);
+      const pad = 40;
+      const max = Math.max(1, ...data);
+      const min = 0;
+
+      ctx.strokeStyle = "rgba(148,163,184,.7)";
+      ctx.beginPath();
+      ctx.moveTo(pad, 10);
+      ctx.lineTo(pad, H-pad);
+      ctx.lineTo(W-10, H-pad);
+      ctx.stroke();
+
+      // line
+      ctx.strokeStyle = "rgba(16,185,129,.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const n = Math.max(1, data.length);
+      for(let i=0;i<n;i++){
+        const x = pad + (W - pad - 20) * (i/(n-1 || 1));
+        const y = (H - pad) - (H - pad - 20) * ((data[i]-min)/(max-min || 1));
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+
+      // dots
+      ctx.fillStyle = "rgba(16,185,129,.95)";
+      for(let i=0;i<n;i++){
+        const x = pad + (W - pad - 20) * (i/(n-1 || 1));
+        const y = (H - pad) - (H - pad - 20) * ((data[i]-min)/(max-min || 1));
+        ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fill();
+      }
+
+      // labels (sparse)
+      ctx.fillStyle = "#64748b";
+      ctx.font = "12px Kanit";
+      const step = Math.ceil(n / 8);
+      for(let i=0;i<n;i+=step){
+        const x = pad + (W - pad - 20) * (i/(n-1 || 1));
+        ctx.fillText(labels[i], x-10, H-pad+18);
+      }
+    }
+
+    async function reloadAll(){
+      await Promise.all([loadStats(), loadList()]);
+      qs("lastUpdate").innerText = new Date().toISOString().slice(0,19).replace("T"," ");
+    }
+
+    async function loadStats(){
+      const days = Number(qs("days").value || 30);
+      const st = await apiJson(`/returns/stats?days=${days}`);
+      const byStatus = st.byStatus || [];
+      const map = {};
+      for(const r of byStatus) map[String(r.status||"").toUpperCase()] = Number(r.count||0);
+
+      const total = byStatus.reduce((s,r)=>s+Number(r.count||0),0);
+      qs("kTotal").innerText = total;
+      qs("kPending").innerText = map.PENDING || 0;
+      qs("kReceived").innerText = map.RECEIVED || 0;
+      qs("kCompleted").innerText = map.COMPLETED || 0;
+
+      // charts
+      const stLabels = ["PENDING","RECEIVED","COMPLETED","CANCELLED"];
+      const stData = stLabels.map(x=>map[x] || 0);
+      drawBar(qs("chartStatus"), stLabels, stData);
+
+      const daysRows = st.byDay || [];
+      const labels = daysRows.map(r=>String(r.day||"").slice(5)); // MM-DD
+      const data = daysRows.map(r=>Number(r.count||0));
+      drawLine(qs("chartTrend"), labels, data);
+    }
+
+    function statusPill(s){
+      const st = String(s||"").toUpperCase();
+      if(st==="PENDING") return '<span class="pill warn">PENDING</span>';
+      if(st==="RECEIVED") return '<span class="pill ok">RECEIVED</span>';
+      if(st==="COMPLETED") return '<span class="pill ok">COMPLETED</span>';
+      if(st==="CANCELLED") return '<span class="pill bad">CANCELLED</span>';
+      return `<span class="pill">${st||"-"}</span>`;
+    }
+
+    function statusOptions(selected){
+      const opts = ["PENDING","RECEIVED","COMPLETED","CANCELLED"];
+      return opts.map(o=>`<option ${String(selected).toUpperCase()===o?"selected":""}>${o}</option>`).join("");
+    }
+
+    async function loadList(){
+      const status = qs("filterStatus").value;
+      const q = qs("filterQ").value.trim();
+      const params = new URLSearchParams();
+      if(status) params.set("status", status);
+      if(q) params.set("q", q);
+      rows = await apiJson(`/returns?${params.toString()}`);
+      qs("countLabel").innerText = `ทั้งหมด ${rows.length} รายการ`;
+      const tb = qs("tbody");
+      tb.innerHTML = rows.map(r=>{
+        const item = (r.item_name || r.asset_tag || r.serial_no || "-");
+        const returner = (r.returner_name || "-") + (r.department ? ` • ${r.department}` : "");
+        return `
+          <tr onclick="openModal(${r.id})">
+            <td><a class="link" href="javascript:void(0)" onclick="event.stopPropagation(); openModal(${r.id})">#${r.id}</a></td>
+            <td>
+              <div style="font-weight:600">${escapeHtml(item)}</div>
+              <div class="muted small">${escapeHtml(r.asset_tag||"")} ${r.serial_no?(" • "+escapeHtml(r.serial_no)):""}</div>
+            </td>
+            <td>
+              <select class="inline-select" onclick="event.stopPropagation()" onchange="quickStatus(${r.id}, this.value)">
+                ${statusOptions(r.status)}
+              </select>
+            </td>
+            <td>
+              <div style="font-weight:500">${escapeHtml(returner)}</div>
+              <div class="muted small">${escapeHtml(r.returner_email||"")}</div>
+            </td>
+            <td class="small">${escapeHtml(String(r.created_at||"").slice(0,16).replace("T"," "))}</td>
+            <td><button class="btn primary" style="padding:8px 10px" onclick="event.stopPropagation(); openModal(${r.id})">View</button></td>
+          </tr>
+        `;
+      }).join("");
+
+      qs("empty").style.display = rows.length ? "none" : "block";
+    }
+
+    function escapeHtml(s){
+      return String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+    }
+
+    async function quickStatus(id, status){
+      try{
+        await apiJson(`/returns/${id}`, { method:"PATCH", body: JSON.stringify({ status }) });
+        toast("อัปเดตสถานะแล้ว", "ok");
+        await reloadAll();
+      }catch(e){
+        toast(e.message || String(e), "danger");
+      }
+    }
+
+    async function createReturn(){
+      const body = {
+        asset_tag: qs("fAsset").value.trim(),
+        item_name: qs("fItem").value.trim(),
+        serial_no: qs("fSerial").value.trim(),
+        condition: qs("fCond").value.trim(),
+        condition_detail: qs("fCondDetail").value.trim(),
+        accessories: qs("fAccessories").value.trim(),
+        returner_name: qs("fRName").value.trim(),
+        returner_email: qs("fREmail").value.trim(),
+        department: qs("fDept").value.trim(),
+        location: qs("fLoc").value.trim(),
+        attachment_url: qs("fLink").value.trim(),
+        reason: qs("fReason").value.trim()
+      };
+      try{
+        qs("formMsg").innerText = "กำลังบันทึก...";
+        await apiJson("/returns", { method:"POST", body: JSON.stringify(body) });
+        qs("formMsg").innerText = "บันทึกแล้ว";
+        toast("บันทึกรายการคืนสำเร็จ", "ok");
+        // clear
+        ["fAsset","fItem","fSerial","fCondDetail","fAccessories","fRName","fREmail","fDept","fLoc","fLink","fReason"].forEach(id=>{ const el=qs(id); if(el) el.value=""; });
+        qs("fCond").value = "";
+        await reloadAll();
+      }catch(e){
+        qs("formMsg").innerText = e.message || String(e);
+        toast(e.message || String(e), "danger");
+      }
+    }
+
+    function openModal(id){
+      currentId = id;
+      const r = rows.find(x=>Number(x.id)===Number(id));
+      if(!r){ toast("ไม่พบรายการ", "danger"); return; }
+      qs("mId").innerText = id;
+      qs("mSub").innerText = `Created ${String(r.created_at||"").slice(0,19).replace("T"," ")} • ${statusPill(r.status).replace(/<[^>]+>/g,"")}`;
+
+      qs("mStatus").value = String(r.status||"PENDING").toUpperCase();
+      qs("mReceived").value = r.received_at || "";
+      qs("mCompleted").value = r.completed_at || "";
+
+      qs("mAsset").value = r.asset_tag || "";
+      qs("mItem").value = r.item_name || "";
+      qs("mSerial").value = r.serial_no || "";
+      qs("mCond").value = r.condition || "";
+      qs("mCondDetail").value = r.condition_detail || "";
+      qs("mAccessories").value = r.accessories || "";
+
+      qs("mRName").value = r.returner_name || "";
+      qs("mREmail").value = r.returner_email || "";
+      qs("mDept").value = r.department || "";
+      qs("mLoc").value = r.location || "";
+      qs("mLink").value = r.attachment_url || "";
+
+      qs("mReason").value = r.reason || "";
+      qs("mAdminNotes").value = r.admin_notes || "";
+      qs("mMeta").innerText =
+        `Recorded by: ${r.received_by || "-"} • RequesterIP: ${r.requester_ip || "-"} • Updated: ${String(r.updated_at||"").slice(0,19).replace("T"," ")}`;
+
+      qs("modal").classList.add("show");
+    }
+
+    function closeModal(){
+      qs("modal").classList.remove("show");
+      currentId = null;
+    }
+
+    async function saveModal(){
+      if(!currentId) return;
+      const body = {
+        status: qs("mStatus").value,
+        received_at: qs("mReceived").value.trim(),
+        completed_at: qs("mCompleted").value.trim(),
+        asset_tag: qs("mAsset").value.trim(),
+        item_name: qs("mItem").value.trim(),
+        serial_no: qs("mSerial").value.trim(),
+        condition: qs("mCond").value.trim(),
+        condition_detail: qs("mCondDetail").value.trim(),
+        accessories: qs("mAccessories").value.trim(),
+        returner_name: qs("mRName").value.trim(),
+        returner_email: qs("mREmail").value.trim(),
+        department: qs("mDept").value.trim(),
+        location: qs("mLoc").value.trim(),
+        attachment_url: qs("mLink").value.trim(),
+        reason: qs("mReason").value.trim(),
+        admin_notes: qs("mAdminNotes").value.trim()
+      };
+      try{
+        await apiJson(`/returns/${currentId}`, { method:"PATCH", body: JSON.stringify(body) });
+        toast("บันทึกแล้ว", "ok");
+        await reloadAll();
+        openModal(currentId); // refresh modal data
+      }catch(e){
+        toast(e.message || String(e), "danger");
+      }
+    }
+
+    async function deleteModal(){
+      if(!currentId) return;
+      if(!confirm("ลบรายการนี้?")) return;
+      try{
+        await apiJson(`/returns/${currentId}`, { method:"DELETE" });
+        toast("ลบแล้ว", "ok");
+        closeModal();
+        await reloadAll();
+      }catch(e){
+        toast(e.message || String(e), "danger");
+      }
+    }
+
+    async function exportExcel(){
+      try{
+        qs("btnExport").disabled = true;
+        const r = await fetch(API + "/export/returns.xlsx", {
+          headers: { "Authorization": "Bearer " + token }
+        });
+        if(!r.ok){
+          const t = await r.text();
+          throw new Error(t || "Export failed");
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "equipment_returns.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast("ดาวน์โหลด Excel แล้ว", "ok");
+      }catch(e){
+        toast(e.message || String(e), "danger");
+      }finally{
+        qs("btnExport").disabled = false;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
