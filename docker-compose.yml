@@ -1,0 +1,12 @@
+services:
+  htc-portal:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+    volumes:
+      - ./uploads:/app/uploads
+      - ./universe/uploads:/app/universe/uploads
+      - ./it/data:/app/it/data
+      - ./universe/data:/app/universe/data
