@@ -1,0 +1,26 @@
+{
+  "name": "htc-portal-bundle",
+  "version": "1.0.0",
+  "description": "Unified Portal for IT Ticket + HTC Universe (single IP/Port)",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.x"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.13",
+    "axios": "^1.6.0",
+    "bcryptjs": "^2.4.3",
+    "@libsql/client": "^0.15.14",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0"
+  }
+}
