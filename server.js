@@ -1869,8 +1869,16 @@ uniApi.post("/users/import_csv", uniRequireRole(["IT"]), async (req, res) => {
 });
 
 uniApi.post("/users/update", uniRequireRole(["IT"]), async (req, res) => {
+  const target = req.body.target;
+  const existing = await dbGet("SELECT * FROM uni_users WHERE username=?", [target]);
+  if (!existing) return res.json({ success: false, message: "User not found" });
+  const role = req.body.role !== undefined ? req.body.role : existing.role;
+  const approved = req.body.approved !== undefined ? Number(req.body.approved ? 1 : 0) : Number(existing.is_approved || 0);
+  const department = req.body.department !== undefined ? (req.body.department || "") : (existing.department || "");
+  const locked = req.body.locked !== undefined ? Number(req.body.locked ? 1 : 0) : Number(existing.is_locked || 0);
   await dbRun("UPDATE uni_users SET role=?, is_approved=?, department=?, is_locked=? WHERE username=?",
-    [req.body.role, Number(req.body.approved ? 1 : 0), req.body.department || "", Number(req.body.locked ? 1 : 0), req.body.target]);
+    [role, approved, department, locked, target]);
+  await logAction(req.actor.username, "UPDATE_USER", `${target} role=${role} dept=${department}`);
   res.json({ success: true });
 });
 uniApi.post("/users/soft_delete", uniRequireRole(["IT"]), async (req, res) => { await dbRun("UPDATE uni_users SET is_deleted=1 WHERE username=?", [req.body.target]); res.json({ success: true }); });

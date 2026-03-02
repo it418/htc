@@ -429,29 +429,51 @@ async function loadUsers(){
     const deleted=Number(u.is_deleted||0)===1;
     const role=String(u.role||"USER").toUpperCase();
     const dept=esc(u.department||"");
-    return `<tr>
-      <td style="padding-left:16px;font-weight:500">${esc(u.username)}</td>
+    const un=esc(u.username);
+    return `<tr data-user="${un}">
+      <td style="padding-left:16px;font-weight:500">${un}</td>
       <td>${esc(u.name||"")}</td>
       <td>
         <select class="badge" style="border:1px solid var(--border);padding:4px 8px;cursor:pointer;font-family:var(--font)"
-          onchange="updateUser('${esc(u.username)}',this.value,${approved?1:0},'${dept}',${locked?1:0})">
+          data-field="role" onchange="saveUserField('${un}')">
           ${["USER","HEAD","IT","FINANCE","CEO"].map(r=>`<option ${r===role?"selected":""}>${r}</option>`).join("")}
         </select>
       </td>
-      <td style="font-size:12px">${dept||"-"}</td>
+      <td><input data-field="dept" value="${dept}" placeholder="แผนก"
+        style="width:120px;padding:4px 8px;font-size:12px;border-radius:8px;border:1.5px solid var(--border);font-family:var(--font);background:#fff"
+        onchange="saveUserField('${un}')" onkeydown="if(event.key==='Enter'){event.preventDefault();saveUserField('${un}')}" /></td>
       <td>${deleted?'<span class="badge red">Deleted</span>':locked?'<span class="badge amber">Locked</span>':approved?'<span class="badge green">Active</span>':'<span class="badge gray">Pending</span>'}</td>
       <td style="font-size:12px;display:flex;gap:4px;flex-wrap:wrap">
-        ${!approved && !deleted ? `<button class="btn sm ok" onclick="updateUser('${esc(u.username)}','${role}',1,'${dept}',0)">Approve</button>` : ""}
+        ${!approved && !deleted ? `<button class="btn sm ok" onclick="quickUpdateUser('${un}',{approved:1})">Approve</button>` : ""}
         ${!deleted ? (locked
-          ? `<button class="btn sm sec" onclick="updateUser('${esc(u.username)}','${role}',${approved?1:0},'${dept}',0)">Unlock</button>`
-          : `<button class="btn sm sec" onclick="updateUser('${esc(u.username)}','${role}',${approved?1:0},'${dept}',1)">Lock</button>`) : ""}
+          ? `<button class="btn sm sec" onclick="quickUpdateUser('${un}',{locked:0})">Unlock</button>`
+          : `<button class="btn sm sec" onclick="quickUpdateUser('${un}',{locked:1})">Lock</button>`) : ""}
         ${deleted
-          ? `<button class="btn sm ok" onclick="restoreUser('${esc(u.username)}')">Restore</button>`
-          : `<button class="btn sm danger" onclick="deleteUser('${esc(u.username)}')">Del</button>`}
-        <button class="btn sm sec" onclick="resetUserPw('${esc(u.username)}')">ResetPW</button>
+          ? `<button class="btn sm ok" onclick="restoreUser('${un}')">Restore</button>`
+          : `<button class="btn sm danger" onclick="deleteUser('${un}')">Del</button>`}
+        <button class="btn sm sec" onclick="resetUserPw('${un}')">ResetPW</button>
       </td>
     </tr>`;
   }).join("");
+}
+
+function _getUserRowData(username){
+  const row=document.querySelector(`tr[data-user="${username}"]`);
+  if(!row)return null;
+  const roleEl=row.querySelector('[data-field="role"]');
+  const deptEl=row.querySelector('[data-field="dept"]');
+  return{role:roleEl?roleEl.value:"USER",department:deptEl?deptEl.value.trim():""};
+}
+async function saveUserField(username){
+  const d=_getUserRowData(username);if(!d)return;
+  const j=await postJson("/users/update",{actor:me.username,target:username,role:d.role,department:d.department});
+  if(j.success){toast("\u2705 บันทึกแล้ว","success")}else{toast(j.message,"error");loadUsers();}
+}
+async function quickUpdateUser(username,overrides){
+  const d=_getUserRowData(username)||{role:"USER",department:""};
+  const body={actor:me.username,target:username,role:d.role,department:d.department,...overrides};
+  const j=await postJson("/users/update",body);
+  if(j.success){toast("\u2705","success");loadUsers()}else toast(j.message,"error");
 }
 
 
@@ -764,5 +786,7 @@ window.showAddUser = showAddUser;
 window.showImportUsers = showImportUsers;
 window.showRequestDetail = showRequestDetail;
 window.closeDetail = closeDetail;
+window.saveUserField = saveUserField;
+window.quickUpdateUser = quickUpdateUser;
 window.toggleAddItem = toggleAddItem;
 window.updateUser = updateUser;
