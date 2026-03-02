@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
 :root{--p:#10b981;--p2:#059669;--pl:#34d399;--sb:#0a0f1e;--bg:#f0f2f8;--card:#fff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--r:16px;--shadow:0 4px 20px rgba(15,23,42,.06);--font:'Kanit',sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -214,6 +215,21 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f0fdf4!important}
 <div class="topbar"><div class="page-title"><i class="fa-solid fa-inbox" style="color:#f59e0b"></i> Approvals Inbox</div><button class="btn sec sm" onclick="loadInbox()"><i class="fa-solid fa-rotate"></i></button></div>
 <div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th style="padding-left:16px">#</th><th>ประเภท</th><th>รายการ</th><th>จำนวน</th><th>ผู้ขอ</th><th>แผนก</th><th>สถานะ</th><th>Actions</th></tr></thead><tbody id="inboxBody"></tbody></table>
 <div id="inboxEmpty" class="empty" style="display:none"><i class="fa-solid fa-inbox"></i><div>ไม่มีรายการรออนุมัติ</div></div></div>
+
+<div style="margin-top:18px">
+  <div class="topbar" style="margin-bottom:10px">
+    <div class="page-title" style="font-size:17px"><i class="fa-solid fa-clock-rotate-left" style="color:#8b5cf6"></i> ประวัติการอนุมัติของฉัน</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn sm sec" onclick="exportInboxHistory()"><i class="fa-solid fa-file-excel" style="color:#059669"></i> Export Excel</button>
+      <button class="btn sec sm" onclick="loadInboxHistory()"><i class="fa-solid fa-rotate"></i></button>
+    </div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table><thead><tr><th style="padding-left:16px">#</th><th>ประเภท</th><th>รายการ</th><th>จำนวน</th><th>ผู้ขอ</th><th>แผนก</th><th>สถานะ</th><th>ดำเนินการโดย</th><th>วันที่</th></tr></thead>
+    <tbody id="historyBody"></tbody></table>
+    <div id="historyEmpty" class="empty" style="display:none"><i class="fa-solid fa-clock-rotate-left"></i><div>ยังไม่มีประวัติ</div></div>
+  </div>
+</div>
 </section>
 
 <!-- INVENTORY -->
@@ -368,6 +384,6 @@ function register(){
   });
 }
 </script>
-<script src="/universe/app.js?v=20260302b" charset="utf-8"></script>
+<script src="/universe/app.js?v=20260302c" charset="utf-8"></script>
 </body>
 </html>

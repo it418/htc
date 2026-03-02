@@ -76,7 +76,7 @@ async function ensureApi(){
   return _apiReadyPromise;
 }
 let me=null,itemsCache=[],cType=null,cStat=null,rpDept=null,rpType=null,logTrend=null,logAction=null;
-let myReqCache=[],inboxReqCache=[];
+let myReqCache=[],inboxReqCache=[],historyCache=[];
 function esc(s){const d=document.createElement("div");d.textContent=s||"";return d.innerHTML}
 function toast(m,t="info"){const c=document.getElementById("toast");const e=document.createElement("div");e.className=`toast ${t==="success"?"ok":t==="error"?"err":"info"}`;e.textContent=m;c.appendChild(e);setTimeout(()=>{e.style.opacity=0;setTimeout(()=>e.remove(),300)},3500)}
 
@@ -142,7 +142,7 @@ function showApp(){
   if(me.role==="IT"){["mUsers","mQuota","mLogs","secAdmin","btnAddItem","thInvAct"].forEach(id=>{const e=document.getElementById(id);if(e)e.classList.remove("hid")})}
   if(["IT","FINANCE","CEO"].includes(me.role))document.getElementById("mReports").classList.remove("hid");
   if(me.must_change_password)document.getElementById("pwCard").style.display="block";
-  go("dash");loadItems();loadLowStock();loadMy();if(canInbox)loadInbox();loadBorrows();
+  go("dash");loadItems();loadLowStock();loadMy();if(canInbox){loadInbox();loadInboxHistory();}loadBorrows();
 }
 
 async function changePw(){const o=document.getElementById("pwOld").value,n=document.getElementById("pwNew").value;if(!o||!n)return;const j=await postJson("/change_password",{actor:me.username,old_password:o,new_password:n});if(j.success){toast("\u2705 \u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08","success");document.getElementById("pwCard").style.display="none"}else toast(j.message,"error")}
@@ -150,7 +150,7 @@ async function changePw(){const o=document.getElementById("pwOld").value,n=docum
 // ===== VIEW SWITCH =====
 function go(v){document.querySelectorAll(".view").forEach(e=>e.classList.remove("act"));document.querySelectorAll(".menu .mi").forEach(e=>e.classList.remove("act"));
   const sec=document.getElementById("v-"+v);if(sec)sec.classList.add("act");const btn=document.getElementById({"dash":"mDash","request":"mReq","mine":"mMine","inbox":"mInbox","inventory":"mInv","borrow":"mBorrow","users":"mUsers","quota":"mQuota","logs":"mLogs","reports":"mReports"}[v]);if(btn)btn.classList.add("act");
-  if(v==="dash")loadDashKpi();else if(v==="mine")loadMy();else if(v==="inbox")loadInbox();else if(v==="inventory")loadItems();else if(v==="borrow")loadBorrows();else if(v==="users")loadUsers();else if(v==="quota")loadQuotas();else if(v==="logs")loadLogs();else if(v==="reports")loadReports();else if(v==="request"){fillItemSelect();onTypeChange();}
+  if(v==="dash")loadDashKpi();else if(v==="mine")loadMy();else if(v==="inbox"){loadInbox();loadInboxHistory();}else if(v==="inventory")loadItems();else if(v==="borrow")loadBorrows();else if(v==="users")loadUsers();else if(v==="quota")loadQuotas();else if(v==="logs")loadLogs();else if(v==="reports")loadReports();else if(v==="request"){fillItemSelect();onTypeChange();}
 }
 function refreshView(){const act=document.querySelector(".view.act");if(act){const v=act.id.replace("v-","");go(v)}}
 
@@ -330,8 +330,69 @@ async function loadInbox(){const j=await getJson("/requests",{actor:me.username,
   document.getElementById("inboxEmpty").style.display=rows.length?"none":"block";
   if(rows.length){document.getElementById("inboxCt").style.display="inline";document.getElementById("inboxCt").textContent=rows.length}else document.getElementById("inboxCt").style.display="none";
   document.getElementById("inboxBody").innerHTML=rows.map(r=>`<tr class="clickable" onclick="showRequestDetail(${r.id},'inbox')"><td style="padding-left:16px;font-weight:600;color:var(--p)">#${r.id}</td><td>${typeBadge(r.req_type)}</td><td style="font-weight:500">${esc(r.item_name)}</td><td>${r.quantity}</td><td style="font-size:12px">${esc(r.requester||"")}</td><td style="font-size:12px">${esc(r.department||"")}</td><td>${badge(r.status)}</td><td style="display:flex;gap:6px"><button class="btn sm ok" onclick="event.stopPropagation();approveReq(${r.id})"><i class="fa-solid fa-check"></i></button><button class="btn sm danger" onclick="event.stopPropagation();rejectReq(${r.id})"><i class="fa-solid fa-xmark"></i></button></td></tr>`).join("")}
-async function approveReq(id){const j=await postJson(`/requests/${id}/approve`,{actor:me.username});if(j.success){toast("\u2705 Approved \u2014 \u0e41\u0e08\u0e49\u0e07 Chat \u0e41\u0e25\u0e49\u0e27!","success");loadInbox();loadMy()}else toast(j.message,"error")}
-async function rejectReq(id){const reason=prompt("\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25\u0e17\u0e35\u0e48\u0e1b\u0e0f\u0e34\u0e40\u0e2a\u0e18:");if(reason===null)return;const j=await postJson(`/requests/${id}/reject`,{actor:me.username,reason:reason||"-"});if(j.success){toast("\u274c Rejected \u2014 \u0e41\u0e08\u0e49\u0e07 Chat \u0e41\u0e25\u0e49\u0e27!","success");loadInbox()}else toast(j.message,"error")}
+async function approveReq(id){const j=await postJson(`/requests/${id}/approve`,{actor:me.username});if(j.success){toast("\u2705 Approved \u2014 \u0e41\u0e08\u0e49\u0e07 Chat \u0e41\u0e25\u0e49\u0e27!","success");loadInbox();loadInboxHistory();loadMy()}else toast(j.message,"error")}
+async function rejectReq(id){const reason=prompt("\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25\u0e17\u0e35\u0e48\u0e1b\u0e0f\u0e34\u0e40\u0e2a\u0e18:");if(reason===null)return;const j=await postJson(`/requests/${id}/reject`,{actor:me.username,reason:reason||"-"});if(j.success){toast("\u274c Rejected \u2014 \u0e41\u0e08\u0e49\u0e07 Chat \u0e41\u0e25\u0e49\u0e27!","success");loadInbox();loadInboxHistory()}else toast(j.message,"error")}
+
+// ===== INBOX HISTORY =====
+let _historyLoaded=false;
+async function loadInboxHistory(){
+  const j=await getJson("/requests",{actor:me.username,scope:"history"});
+  const rows=j.rows||[];
+  historyCache=rows;
+  _historyLoaded=true;
+  document.getElementById("historyEmpty").style.display=rows.length?"none":"block";
+  document.getElementById("historyBody").innerHTML=rows.map(r=>{
+    // Determine who acted and when
+    let actedBy="", actedAt="";
+    if(r.rejected_by===me.username){ actedBy=`❌ ปฏิเสธ`; actedAt=(r.updated_at||"").slice(0,19); }
+    else if(r.head_approved_by===me.username){ actedBy=`✅ อนุมัติ (HEAD)`; actedAt=(r.head_approved_at||"").replace("T"," ").slice(0,19); }
+    else if(r.it_approved_by===me.username){ actedBy=`✅ อนุมัติ (IT)`; actedAt=(r.it_approved_at||"").replace("T"," ").slice(0,19); }
+    else if(r.finance_approved_by===me.username){ actedBy=`✅ อนุมัติ (Finance)`; actedAt=(r.finance_approved_at||"").replace("T"," ").slice(0,19); }
+    else if(r.ceo_approved_by===me.username){ actedBy=`✅ อนุมัติ (CEO)`; actedAt=(r.ceo_approved_at||"").replace("T"," ").slice(0,19); }
+    else { actedBy="-"; actedAt=(r.updated_at||"").slice(0,10); }
+    return `<tr class="clickable" onclick="showRequestDetail(${r.id},'history')"><td style="padding-left:16px;font-weight:600;color:var(--p)">#${r.id}</td><td>${typeBadge(r.req_type)}</td><td style="font-weight:500">${esc(r.item_name)}</td><td>${r.quantity}</td><td style="font-size:12px">${esc(r.requester||"")}</td><td style="font-size:12px">${esc(r.department||"")}</td><td>${badge(r.status)}</td><td style="font-size:12px">${actedBy}</td><td class="muted" style="font-size:11px">${actedAt.replace("T"," ")}</td></tr>`;
+  }).join("");
+}
+
+function exportInboxHistory(){
+  if(!historyCache.length){toast("ไม่มีข้อมูล","error");return}
+  const statusTh={PENDING:"รอหัวหน้า",HEAD_APPROVED:"หัวหน้าอนุมัติ",FINANCE_APPROVED:"Finance อนุมัติ",APPROVED:"อนุมัติแล้ว",REJECTED:"ปฏิเสธ",CANCELLED:"ยกเลิก"};
+  const typeTh={WITHDRAW:"เบิก",BORROW:"ยืม",PURCHASE:"ซื้อ"};
+  const data=historyCache.map(r=>{
+    const row={
+      "เลขที่": r.id,
+      "ประเภท": typeTh[r.req_type]||r.req_type,
+      "รายการ": r.item_name,
+      "จำนวน": r.quantity,
+      "ผู้ขอ": r.requester,
+      "แผนก": r.department,
+      "สถานะ": statusTh[r.status]||r.status,
+      "HEAD อนุมัติโดย": r.head_approved_by||"-",
+      "HEAD อนุมัติเมื่อ": (r.head_approved_at||"").replace("T"," ").slice(0,19)||"-",
+      "IT อนุมัติโดย": r.it_approved_by||"-",
+      "IT อนุมัติเมื่อ": (r.it_approved_at||"").replace("T"," ").slice(0,19)||"-",
+      "Finance อนุมัติโดย": r.finance_approved_by||"-",
+      "Finance อนุมัติเมื่อ": (r.finance_approved_at||"").replace("T"," ").slice(0,19)||"-",
+      "CEO อนุมัติโดย": r.ceo_approved_by||"-",
+      "CEO อนุมัติเมื่อ": (r.ceo_approved_at||"").replace("T"," ").slice(0,19)||"-",
+      "ปฏิเสธโดย": r.rejected_by||"-",
+      "เหตุผลปฏิเสธ": r.reject_reason||"-",
+      "ลิงก์แนบ": r.image_url||"-",
+      "เหตุผล": r.reason||"-",
+      "วันที่สร้าง": (r.created_at||"").replace("T"," ").slice(0,19),
+    };
+    return row;
+  });
+  if(typeof XLSX==="undefined"){toast("กำลังโหลด...กรุณาลองอีกครั้ง","error");return}
+  const ws=XLSX.utils.json_to_sheet(data);
+  // Auto-width columns
+  const colWidths=Object.keys(data[0]).map(k=>({wch:Math.max(k.length+2, ...data.map(r=>String(r[k]||"").length).slice(0,50))+2}));
+  ws["!cols"]=colWidths;
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"ประวัติอนุมัติ");
+  XLSX.writeFile(wb,`approval_history_${me.username}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast("📥 ดาวน์โหลดเรียบร้อย","success");
+}
 
 // ===== BORROW =====
 async function loadBorrows(){
@@ -540,7 +601,7 @@ try { ensureApi(); } catch {}
 
 // ===== REQUEST DETAIL MODAL =====
 function showRequestDetail(id, source) {
-  const cache = source === 'inbox' ? inboxReqCache : myReqCache;
+  const cache = source === 'inbox' ? inboxReqCache : source === 'history' ? historyCache : myReqCache;
   const r = cache.find(x => x.id === id);
   if (!r) { toast("ไม่พบข้อมูล", "error"); return; }
 
@@ -682,6 +743,8 @@ window.exportData = exportData;
 window.go = go;
 window.loadBorrows = loadBorrows;
 window.loadInbox = loadInbox;
+window.loadInboxHistory = loadInboxHistory;
+window.exportInboxHistory = exportInboxHistory;
 window.loadItems = loadItems;
 window.loadLogs = loadLogs;
 window.loadMy = loadMy;

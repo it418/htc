@@ -1612,6 +1612,9 @@ uniApi.get("/requests", async (req, res) => {
     else if (u.role === "FINANCE") { sql += " AND status='HEAD_APPROVED' AND req_type='PURCHASE'"; }
     else if (u.role === "CEO") { sql += " AND status='FINANCE_APPROVED' AND req_type='PURCHASE'"; }
     else { sql += " AND 1=0"; }
+  } else if (scope === "history") {
+    sql += " AND (head_approved_by=? OR it_approved_by=? OR finance_approved_by=? OR ceo_approved_by=? OR rejected_by=?)";
+    params.push(actor, actor, actor, actor, actor);
   }
   sql += " ORDER BY id DESC";
   res.json({ success: true, rows: await dbAll(sql, params) });
