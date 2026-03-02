@@ -76,6 +76,7 @@ async function ensureApi(){
   return _apiReadyPromise;
 }
 let me=null,itemsCache=[],cType=null,cStat=null,rpDept=null,rpType=null,logTrend=null,logAction=null;
+let myReqCache=[],inboxReqCache=[];
 function esc(s){const d=document.createElement("div");d.textContent=s||"";return d.innerHTML}
 function toast(m,t="info"){const c=document.getElementById("toast");const e=document.createElement("div");e.className=`toast ${t==="success"?"ok":t==="error"?"err":"info"}`;e.textContent=m;c.appendChild(e);setTimeout(()=>{e.style.opacity=0;setTimeout(()=>e.remove(),300)},3500)}
 
@@ -319,14 +320,16 @@ async function createReq(){
 // ===== MY REQUESTS =====
 async function loadMy(){const j=await getJson("/requests",{actor:me.username,scope:"mine"});const rows=j.rows||j.requests||[];
   document.getElementById("myEmpty").style.display=rows.length?"none":"block";
-  document.getElementById("myBody").innerHTML=rows.map(r=>`<tr><td style="padding-left:16px;font-weight:600;color:var(--p)">#${r.id}</td><td>${typeBadge(r.req_type)}</td><td style="font-weight:500">${esc(r.item_name)}</td><td>${r.quantity}</td><td>${badge(r.status)}</td><td class="muted" style="font-size:12px">${(r.created_at||"").slice(0,10)}</td><td>${r.status==="PENDING"?`<button class="btn sm danger" onclick="cancelReq(${r.id})"><i class="fa-solid fa-xmark"></i> \u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button>`:""}</td></tr>`).join("")}
+  myReqCache=rows;
+  document.getElementById("myBody").innerHTML=rows.map(r=>`<tr class="clickable" onclick="showRequestDetail(${r.id},'mine')"><td style="padding-left:16px;font-weight:600;color:var(--p)">#${r.id}</td><td>${typeBadge(r.req_type)}</td><td style="font-weight:500">${esc(r.item_name)}</td><td>${r.quantity}</td><td>${badge(r.status)}</td><td class="muted" style="font-size:12px">${(r.created_at||"").slice(0,10)}</td><td>${r.status==="PENDING"?`<button class="btn sm danger" onclick="event.stopPropagation();cancelReq(${r.id})"><i class="fa-solid fa-xmark"></i> \u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button>`:""}</td></tr>`).join("")}
 async function cancelReq(id){if(!confirm("\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01 #"+id+"?"))return;const j=await postJson(`/requests/${id}/cancel`,{actor:me.username});if(j.success){toast("Cancelled","success");loadMy()}else toast(j.message,"error")}
 
 // ===== INBOX =====
 async function loadInbox(){const j=await getJson("/requests",{actor:me.username,scope:"inbox"});const rows=j.rows||j.requests||[];
+  inboxReqCache=rows;
   document.getElementById("inboxEmpty").style.display=rows.length?"none":"block";
   if(rows.length){document.getElementById("inboxCt").style.display="inline";document.getElementById("inboxCt").textContent=rows.length}else document.getElementById("inboxCt").style.display="none";
-  document.getElementById("inboxBody").innerHTML=rows.map(r=>`<tr><td style="padding-left:16px;font-weight:600;color:var(--p)">#${r.id}</td><td>${typeBadge(r.req_type)}</td><td style="font-weight:500">${esc(r.item_name)}</td><td>${r.quantity}</td><td style="font-size:12px">${esc(r.requester||"")}</td><td style="font-size:12px">${esc(r.department||"")}</td><td>${badge(r.status)}</td><td style="display:flex;gap:6px"><button class="btn sm ok" onclick="approveReq(${r.id})"><i class="fa-solid fa-check"></i></button><button class="btn sm danger" onclick="rejectReq(${r.id})"><i class="fa-solid fa-xmark"></i></button></td></tr>`).join("")}
+  document.getElementById("inboxBody").innerHTML=rows.map(r=>`<tr class="clickable" onclick="showRequestDetail(${r.id},'inbox')"><td style="padding-left:16px;font-weight:600;color:var(--p)">#${r.id}</td><td>${typeBadge(r.req_type)}</td><td style="font-weight:500">${esc(r.item_name)}</td><td>${r.quantity}</td><td style="font-size:12px">${esc(r.requester||"")}</td><td style="font-size:12px">${esc(r.department||"")}</td><td>${badge(r.status)}</td><td style="display:flex;gap:6px"><button class="btn sm ok" onclick="event.stopPropagation();approveReq(${r.id})"><i class="fa-solid fa-check"></i></button><button class="btn sm danger" onclick="event.stopPropagation();rejectReq(${r.id})"><i class="fa-solid fa-xmark"></i></button></td></tr>`).join("")}
 async function approveReq(id){const j=await postJson(`/requests/${id}/approve`,{actor:me.username});if(j.success){toast("\u2705 Approved \u2014 \u0e41\u0e08\u0e49\u0e07 Chat \u0e41\u0e25\u0e49\u0e27!","success");loadInbox();loadMy()}else toast(j.message,"error")}
 async function rejectReq(id){const reason=prompt("\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25\u0e17\u0e35\u0e48\u0e1b\u0e0f\u0e34\u0e40\u0e2a\u0e18:");if(reason===null)return;const j=await postJson(`/requests/${id}/reject`,{actor:me.username,reason:reason||"-"});if(j.success){toast("\u274c Rejected \u2014 \u0e41\u0e08\u0e49\u0e07 Chat \u0e41\u0e25\u0e49\u0e27!","success");loadInbox()}else toast(j.message,"error")}
 
@@ -535,6 +538,47 @@ if(saved){try{me=JSON.parse(saved);showApp()}catch{localStorage.removeItem("htc_
 try { ensureApi(); } catch {}
 
 
+// ===== REQUEST DETAIL MODAL =====
+function showRequestDetail(id, source) {
+  const cache = source === 'inbox' ? inboxReqCache : myReqCache;
+  const r = cache.find(x => x.id === id);
+  if (!r) { toast("ไม่พบข้อมูล", "error"); return; }
+
+  const typeLabel = { WITHDRAW: "📤 เบิก", BORROW: "🔄 ยืม", PURCHASE: "🛒 ซื้อ" };
+  const statusLabel = { PENDING: "รอหัวหน้า", HEAD_APPROVED: "หัวหน้าอนุมัติ", FINANCE_APPROVED: "Finance อนุมัติ", APPROVED: "อนุมัติแล้ว", REJECTED: "ปฏิเสธ", CANCELLED: "ยกเลิก" };
+
+  let imgHtml = "";
+  if (r.image_url) {
+    if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(r.image_url) || r.image_url.includes("/image")) {
+      imgHtml = `<div class="detail-item full"><div class="detail-label">รูปภาพ / เอกสาร</div><a href="${esc(r.image_url)}" target="_blank"><img src="${esc(r.image_url)}" class="detail-img" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" alt="attached"><span class="badge blue" style="display:none;margin-top:6px"><i class="fa-solid fa-link"></i> เปิดลิงก์</span></a></div>`;
+    } else {
+      imgHtml = `<div class="detail-item full"><div class="detail-label">ลิงก์แนบ</div><div class="detail-val"><a href="${esc(r.image_url)}" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i> ${esc(r.image_url.length > 60 ? r.image_url.slice(0, 57) + "..." : r.image_url)}</a></div></div>`;
+    }
+  }
+
+  const html = `<div class="detail-grid">
+    <div class="detail-item"><div class="detail-label">เลขที่คำขอ</div><div class="detail-val" style="color:var(--p);font-size:18px;font-weight:700">#${r.id}</div></div>
+    <div class="detail-item"><div class="detail-label">ประเภท</div><div class="detail-val">${typeBadge(r.req_type)}</div></div>
+    <div class="detail-item"><div class="detail-label">สถานะ</div><div class="detail-val">${badge(r.status)}</div></div>
+    <div class="detail-item"><div class="detail-label">จำนวน</div><div class="detail-val" style="font-size:18px;font-weight:700">${r.quantity}</div></div>
+    <div class="detail-divider"></div>
+    <div class="detail-item full"><div class="detail-label">รายการ</div><div class="detail-val" style="font-size:15px">${esc(r.item_name)}</div></div>
+    <div class="detail-item"><div class="detail-label">ผู้ขอ</div><div class="detail-val"><i class="fa-solid fa-user" style="color:#64748b;font-size:11px"></i> ${esc(r.requester || "-")}</div></div>
+    <div class="detail-item"><div class="detail-label">แผนก</div><div class="detail-val"><i class="fa-solid fa-building" style="color:#64748b;font-size:11px"></i> ${esc(r.department || "-")}</div></div>
+    ${r.reason ? `<div class="detail-divider"></div><div class="detail-item full"><div class="detail-label">เหตุผล / หมายเหตุ</div><div class="detail-val">${esc(r.reason).replace(/\n/g, "<br>")}</div></div>` : ""}
+    ${r.reject_reason ? `<div class="detail-item full"><div class="detail-label" style="color:#dc2626">เหตุผลที่ปฏิเสธ</div><div class="detail-val" style="color:#dc2626">${esc(r.reject_reason)}</div></div>` : ""}
+    ${imgHtml}
+    <div class="detail-divider"></div>
+    <div class="detail-item"><div class="detail-label">วันที่สร้าง</div><div class="detail-val muted" style="font-size:12px">${(r.created_at || "").replace("T", " ").slice(0, 19)}</div></div>
+    <div class="detail-item"><div class="detail-label">อัพเดตล่าสุด</div><div class="detail-val muted" style="font-size:12px">${(r.updated_at || "").replace("T", " ").slice(0, 19)}</div></div>
+    ${r.approved_at ? `<div class="detail-item"><div class="detail-label">วันที่อนุมัติ</div><div class="detail-val muted" style="font-size:12px">${(r.approved_at || "").replace("T", " ").slice(0, 19)}</div></div>` : ""}
+  </div>`;
+
+  document.getElementById("detailBody").innerHTML = html;
+  document.getElementById("detailModal").classList.add("show");
+}
+function closeDetail() { document.getElementById("detailModal").classList.remove("show"); }
+
 // Expose functions for inline HTML handlers (onclick/onchange/onkeypress)
 window.addItem = addItem;
 window.approveReq = approveReq;
@@ -565,5 +609,7 @@ window.setAuthTab = setAuthTab;
 window.setQuota = setQuota;
 window.showAddUser = showAddUser;
 window.showImportUsers = showImportUsers;
+window.showRequestDetail = showRequestDetail;
+window.closeDetail = closeDetail;
 window.toggleAddItem = toggleAddItem;
 window.updateUser = updateUser;
