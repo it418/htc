@@ -11,6 +11,9 @@
 docker compose up --build
 ```
 
+> ถ้า **ไม่ได้ตั้งค่า Turso** ระบบจะใช้ฐานข้อมูลแบบ **local file** อัตโนมัติ (อยู่ที่ `./universe/data/htc.db`)
+
+
 เปิดเว็บ:
 - Portal: http://localhost:3000/
 - IT Ticket: http://localhost:3000/it/login.html
@@ -23,10 +26,12 @@ docker compose up --build
 
 ## วิธีรันด้วย Node (สำหรับ dev)
 1) ติดตั้ง Node.js (แนะนำ Node 18+)
-2) สร้างไฟล์ `.env` จาก `.env.example` แล้วใส่ค่า Turso ของคุณ:
+2) (แนะนำ) สร้างไฟล์ `.env` จาก `.env.example` แล้วใส่ค่า Turso ของคุณ:
    - `TURSO_DATABASE_URL`
    - `TURSO_AUTH_TOKEN`
    - `JWT_SECRET`
+
+> ถ้าไม่ใส่ Turso ระบบจะใช้ฐานข้อมูลแบบ **local file** ให้เอง
 3) ในโฟลเดอร์นี้:
 ```bash
 npm install

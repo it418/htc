@@ -47,14 +47,58 @@ const TURSO_AUTH_TOKEN = _sanitizeEnv(process.env.TURSO_AUTH_TOKEN || process.en
 // This server should NOT crash at import-time if env is missing; instead we surface a clear health/debug response.
 let turso = null;
 
+function isFileUrl(u) {
+  return String(u || "").startsWith("file:");
+}
+
+// Fallback: use a local libSQL (SQLite) file so Login/Register works out-of-the-box.
+// On Vercel without Turso env, this will fallback to an ephemeral /tmp DB (works, but data is not guaranteed to persist).
+function resolveDbUrl() {
+  if (TURSO_DATABASE_URL) return TURSO_DATABASE_URL;
+  if (process.env.LIBSQL_FILE || process.env.LOCAL_DB_FILE) {
+    const p = _sanitizeEnv(process.env.LIBSQL_FILE || process.env.LOCAL_DB_FILE);
+    if (!p) return "";
+    if (p.startsWith("file:")) return p;
+    const abs = path.isAbsolute(p) ? p : path.join(__dirname, p);
+    return `file:${abs}`;
+  }
+  // default local path (persistable in docker-compose via ./universe/data volume)
+  const abs = path.join(__dirname, "universe", "data", "htc.db");
+  return `file:${abs}`;
+}
+
+let DB_URL = resolveDbUrl();
+let DB_TOKEN = (!DB_URL || isFileUrl(DB_URL)) ? "" : TURSO_AUTH_TOKEN;
+
 function hasDbEnv() {
-  return !!TURSO_DATABASE_URL && !!TURSO_AUTH_TOKEN;
+  if (!DB_URL) return false;
+  if (isFileUrl(DB_URL)) return true;
+  return !!DB_TOKEN;
 }
 
 function getTursoClient() {
   if (!hasDbEnv()) return null;
   if (!turso) {
-    turso = createClient({ url: TURSO_DATABASE_URL, authToken: TURSO_AUTH_TOKEN });
+    // Ensure local file directory exists
+    if (isFileUrl(DB_URL)) {
+      const fp = DB_URL.replace(/^file:/, "");
+      try {
+        fs.mkdirSync(path.dirname(fp), { recursive: true });
+        // Touch file to validate write permission early (helps clearer errors)
+        try { fs.closeSync(fs.openSync(fp, "a")); } catch {}
+        turso = createClient({ url: DB_URL });
+      } catch (e) {
+        // If folder is not writable (common in locked-down environments), fallback to OS temp.
+        const tmp = path.join(os.tmpdir(), "htc-portal-bundle");
+        try { fs.mkdirSync(tmp, { recursive: true }); } catch {}
+        const alt = path.join(tmp, "htc.db");
+        DB_URL = `file:${alt}`;
+        DB_TOKEN = "";
+        turso = createClient({ url: DB_URL });
+      }
+    } else {
+      turso = createClient({ url: DB_URL, authToken: DB_TOKEN });
+    }
   }
   return turso;
 }
@@ -89,7 +133,7 @@ async function ensureDbReady() {
 
   _dbReadyPromise = (async () => {
     const c = getTursoClient();
-    if (!c) throw new Error("Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN");
+    if (!c) throw new Error("DB not configured (set TURSO_DATABASE_URL/TURSO_AUTH_TOKEN or use local file DB)");
     await initDB(c);
     _dbReady = true;
   })().catch((e) => {
@@ -169,39 +213,43 @@ const uniUpload = multer({
 app.use("/", express.static(path.join(__dirname, "public")));
 app.use("/it", express.static(path.join(__dirname, "it", "public"), {
   etag: false,
-  setHeaders: (res, fp) => { if (String(fp).endsWith(".html")) res.setHeader("Cache-Control", "no-store"); }
+  setHeaders: (res, fp) => {
+    if (String(fp).endsWith(".html")) res.setHeader("Cache-Control", "no-store");
+    if (String(fp).endsWith(".js"))   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  }
 }));
-app.use("/universe", express.static(path.join(__dirname, "universe", "public"), { etag: true }));
+// Universe UI: disable caching for HTML so deployments update immediately (prevents stale login JS)
+app.use("/universe", express.static(path.join(__dirname, "universe", "public"), {
+  etag: false,
+  setHeaders: (res, fp) => {
+    if (String(fp).endsWith(".html") || String(fp).endsWith(".js")) res.setHeader("Cache-Control", "no-store");
+    if (String(fp).endsWith(".js")) res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  }
+}));
 
 app.get(["/it", "/it/"], (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const p = path.join(__dirname, "it", "public", "app.html");
-  try {
-    if (fs.existsSync(p)) return res.sendFile(p);
-  } catch {}
+  try { if (fs.existsSync(p)) return res.sendFile(p); } catch {}
   return res.redirect("/");
 });
 app.get("/it/returns", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const p = path.join(__dirname, "it", "public", "returns.html");
-  try {
-    if (fs.existsSync(p)) return res.sendFile(p);
-  } catch {}
+  try { if (fs.existsSync(p)) return res.sendFile(p); } catch {}
   return res.redirect("/it/");
 });
 app.get("/it/login", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const p = path.join(__dirname, "it", "public", "login.html");
-  try {
-    if (fs.existsSync(p)) return res.sendFile(p);
-  } catch {}
+  try { if (fs.existsSync(p)) return res.sendFile(p); } catch {}
   return res.redirect("/it/");
 });
-app.get("/universe", (req, res) => {
+// Serve Universe index without redirect (redirects can break when behind sub-path proxies)
+app.get(["/universe", "/universe/"], (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   const p = path.join(__dirname, "universe", "public", "index.html");
-  try {
-    if (fs.existsSync(p)) return res.redirect("/universe/index.html");
-  } catch {}
+  try { if (fs.existsSync(p)) return res.sendFile(p); } catch {}
   return res.redirect("/");
 });
 app.get("/api/meta", (req, res) => {
@@ -214,7 +262,12 @@ app.get("/api/meta", (req, res) => {
     ips: getLanIps(),
     paths: { portal: "/", it: "/it/login.html", universe: "/universe/index.html" },
     server_time: new Date().toISOString(),
-    db: { url_set: !!TURSO_DATABASE_URL, token_set: !!TURSO_AUTH_TOKEN, max_upload_mb: MAX_UPLOAD_MB }
+    db: {
+      mode: (!DB_URL ? "missing_env" : (isFileUrl(DB_URL) ? "local_file" : "turso")),
+      url_set: !!DB_URL,
+      token_set: !!DB_TOKEN,
+      max_upload_mb: MAX_UPLOAD_MB
+    }
   });
 });
 // Health/debug endpoint (no auth)
@@ -228,7 +281,7 @@ app.get("/api/health", async (req, res) => {
       build_id: BUILD_ID,
       build_time: BUILD_TIME,
       error: String(e?.message || e),
-      env: { turso_url_set: !!TURSO_DATABASE_URL, turso_token_set: !!TURSO_AUTH_TOKEN }
+      env: { db_url_set: !!DB_URL, db_token_set: !!DB_TOKEN }
     });
   }
 });
@@ -517,6 +570,18 @@ async function initDB(client) {
   if (!itemCnt || Number(itemCnt.c || 0) === 0) {
     await dbRun("INSERT INTO uni_items (name, stock, category, unit, min_stock, price, is_asset, asset_tag) VALUES ('hardware', 100, 'General', 'pcs', 0, 0, 0, '')");
   }
+
+  // Ensure seed accounts are usable even if DB already existed (older runs may have locked/unapproved admin).
+  try {
+    await dbRun("UPDATE uni_users SET is_approved=1, is_locked=0, is_deleted=0 WHERE username='admin'");
+    const ar = await dbGet("SELECT password FROM uni_users WHERE username='admin'");
+    if (ar && (!ar.password || String(ar.password).trim() === "")) {
+      await dbRun("UPDATE uni_users SET password=? WHERE username='admin'", [bcrypt.hashSync("123", 10)]);
+    }
+    await dbRun("UPDATE uni_users SET is_approved=1, is_locked=0, is_deleted=0 WHERE username='head_mkt'");
+  } catch (e) {
+    console.error("UNI seed normalize error", e);
+  }
 }
 
 
@@ -579,9 +644,9 @@ itApi.get("/_debug/db", async (req, res) => {
     }
   }
   res.json({
-    db_mode: envOk ? "turso" : "missing_env",
-    turso_url_set: !!TURSO_DATABASE_URL,
-    turso_token_set: !!TURSO_AUTH_TOKEN,
+    db_mode: envOk ? (isFileUrl(DB_URL) ? "local_file" : "turso") : "missing_env",
+    db_url_set: !!DB_URL,
+    db_token_set: !!DB_TOKEN,
     ping,
     db_ready: _dbReady,
     max_upload_mb: MAX_UPLOAD_MB,
@@ -598,19 +663,33 @@ itApi.use(async (req, res, next) => {
     return res.status(500).json({
       error: "DB not ready",
       detail: String(e?.message || e),
-      env: { turso_url_set: !!TURSO_DATABASE_URL, turso_token_set: !!TURSO_AUTH_TOKEN },
+      env: { db_url_set: !!DB_URL, db_token_set: !!DB_TOKEN },
       build_id: BUILD_ID
     });
   }
 });
 itApi.post("/register", async (req, res) => {
-  const { name, email, password } = req.body || {};
+  const name = String(req.body?.name || "").trim();
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const password = String(req.body?.password || "");
   if (!name || !email || !password) return res.status(400).json({ error: "Missing fields" });
+
+  // Check email uniqueness first
+  const emailExists = await dbGet("SELECT id FROM users WHERE lower(email)=lower(?)", [email]);
+  if (emailExists) return res.status(400).json({ error: "Email exists" });
+
   try {
-    await dbRun("INSERT INTO users (name,email,password_hash,role) VALUES (?,?,?,'user')", [name, email, bcrypt.hashSync(password, 10)]);
-    await itAudit(null, "REGISTER", email, "Self registration");
-    res.json({ ok: true });
-  } catch { res.status(400).json({ error: "Email exists" }); }
+    const ph = bcrypt.hashSync(password, 10);
+    const r = await dbRun("INSERT INTO users (name,email,password_hash,role) VALUES (?,?,?,'user')", [name, email, ph]);
+    const u = await dbGet("SELECT id,name,email,role,must_change_password,is_locked,is_deleted FROM users WHERE id=?", [Number(r.lastInsertRowid)]);
+    if (!u) return res.status(500).json({ error: "Registration failed, please try again" });
+    const token = jwt.sign({ id: u.id, name: u.name, role: u.role }, JWT_SECRET, { expiresIn: "7d" });
+    await itAudit(u.id, "REGISTER", u.email, "Self registration");
+    res.json({ token, user: { id: u.id, name: u.name, role: u.role, must_change_password: !!u.must_change_password } });
+  } catch (e) {
+    console.error("REGISTER ERROR:", e);
+    res.status(400).json({ error: "Registration failed: " + (String(e?.message || "").includes("UNIQUE") ? "Email exists" : "Please try again") });
+  }
 });
 
 itApi.post("/login", async (req, res) => {
@@ -767,7 +846,7 @@ itApi.post("/tickets", itAuth, async (req, res) => {
     }
   }
 
-  await sendChat(CHAT_WEBHOOK_IT, `🛠️ *IT Ticket ใหม่ #${ticketId}*\n━━━━━━━━━━━━━━\n📋 หัวข้อ: ${tTitle}\n📁 หมวดหมู่: ${tCat}\n🔴 ความเร่งด่วน: ${tPri}\n👤 ผู้แจ้ง: ${req.user.name}\n📅 Due: ${computedDue}${APP_URL ? `\n🔗 เปิดดู: ${APP_URL}/it/?id=${ticketId}` : ""}`);
+  await sendChat(CHAT_WEBHOOK_IT, `🛠️ *IT Ticket ใหม่ #${ticketId}*\n━━━━━━━━━━━━━━\n📋 หัวข้อ: ${tTitle}\n📁 หมวดหมู่: ${tCat}\n🔴 ความเร่งด่วน: ${tPri}\n👤 ผู้แจ้ง: ${req.user.name}\n📅 Due: ${computedDue}${APP_URL ? `\n🔗 ${APP_URL}/it/?id=${ticketId}` : ""}`);
 
   res.json({ id: ticketId });
 });
@@ -786,7 +865,11 @@ itApi.get("/tickets/:id", itAuth, async (req, res) => {
   const comments = await dbAll("SELECT c.*, u.name as user_name FROM comments c JOIN users u ON u.id = c.user_id WHERE ticket_id = ? ORDER BY c.created_at ASC", [id]);
   const history = await dbAll("SELECT h.*, u.name as actor_name FROM ticket_history h LEFT JOIN users u ON u.id = h.actor_id WHERE ticket_id = ? ORDER BY h.created_at DESC", [id]);
   const tags = (await dbAll("SELECT tag FROM ticket_tags WHERE ticket_id=? ORDER BY tag", [id])).map(r => r.tag);
-  const attachments = await dbAll("SELECT id,url,original_name,created_at, u.name as uploader_name FROM ticket_attachments a JOIN users u ON u.id=a.uploader_id WHERE ticket_id=? ORDER BY created_at DESC", [id]);
+  // Qualify columns to avoid ambiguous `id` / `created_at` when joining with users
+  const attachments = await dbAll(
+    "SELECT a.id, a.url, a.original_name, a.created_at, u.name as uploader_name FROM ticket_attachments a JOIN users u ON u.id=a.uploader_id WHERE a.ticket_id=? ORDER BY a.created_at DESC",
+    [id]
+  );
   const csat = await dbGet("SELECT rating, comment, created_at FROM csat WHERE ticket_id=?", [id]) || null;
   const checklist = await dbAll("SELECT id,text,is_done,created_at FROM ticket_checklist WHERE ticket_id=? ORDER BY id ASC", [id]);
   res.json({ ticket: t, comments, history, tags, attachments, checklist, csat });
@@ -1073,6 +1156,17 @@ itApi.get("/export/audit.csv", itAuth, itRequireRole("admin"), async (req, res) 
 
 
 // ================= Equipment Returns (IT) =================
+
+// IMPORTANT: /returns/stats must be before /returns/:id to avoid route conflict
+itApi.get("/returns/stats", itAuth, itRequireRole("admin","agent"), async (req, res) => {
+  const byStatus = await dbAll("SELECT status, COUNT(*) as count FROM it_returns WHERE is_deleted=0 GROUP BY status ORDER BY count DESC");
+  const byCondition = await dbAll("SELECT condition, COUNT(*) as count FROM it_returns WHERE is_deleted=0 AND condition IS NOT NULL AND condition!='' GROUP BY condition ORDER BY count DESC");
+  const monthly = await dbAll("SELECT substr(created_at,1,7) as month, COUNT(*) as count FROM it_returns WHERE is_deleted=0 GROUP BY month ORDER BY month DESC LIMIT 6");
+  const total = await dbGet("SELECT COUNT(*) as c FROM it_returns WHERE is_deleted=0");
+  const pending = await dbGet("SELECT COUNT(*) as c FROM it_returns WHERE is_deleted=0 AND status='PENDING'");
+  res.json({ total: total?.c||0, pending: pending?.c||0, byStatus, byCondition, monthly });
+});
+
 itApi.get("/returns", itAuth, async (req, res) => {
   const isUser = req.user.role === "user";
   const where = ["r.is_deleted=0"];
@@ -1116,7 +1210,7 @@ itApi.post("/returns", itAuth, async (req, res) => {
   // Send Google Chat notification for return
   const returnId = r.lastInsertRowid;
   const itemLine = [asset_tag && `Asset Tag: ${asset_tag}`, item_name && `Item: ${item_name}`, serial_no && `S/N: ${serial_no}`].filter(Boolean).join(", ");
-  await sendChat(CHAT_WEBHOOK_RETURNS, `📦 *คืนอุปกรณ์ใหม่ #${returnId}*\n━━━━━━━━━━━━━━\n👤 ผู้คืน: ${req.user.name}\n🏷️ อุปกรณ์: ${itemLine || "-"}\n🔍 สภาพ: ${condition || "-"}\n📝 หมายเหตุ: ${reason || "-"}\n⏳ สถานะ: PENDING${APP_URL ? `\n🔗 ดูรายละเอียด: ${APP_URL}/it/returns` : ""}`);
+  await sendChat(CHAT_WEBHOOK_RETURNS, `📦 *คืนอุปกรณ์ใหม่ #${returnId}*\n━━━━━━━━━━━━━━\n👤 ผู้คืน: ${req.user.name}\n🏷️ ${itemLine || "-"}\n🔍 สภาพ: ${condition || "-"}\n📝 ${reason || "-"}\n⏳ PENDING${APP_URL ? `\n🔗 ${APP_URL}/it/returns` : ""}`);
 
   res.json({ ok: true, id: returnId });
 });
@@ -1175,7 +1269,7 @@ itApi.patch("/returns/:id", itAuth, itRequireRole("admin","agent"), async (req, 
     const newStatus = String(req.body.status || "PENDING").trim().toUpperCase();
     const statusEmoji = { RECEIVED: "📥", COMPLETED: "✅", CANCELLED: "❌", PENDING: "⏳" }[newStatus] || "🔄";
     const itemLine = [old.asset_tag && `Asset: ${old.asset_tag}`, old.item_name && `Item: ${old.item_name}`, old.serial_no && `S/N: ${old.serial_no}`].filter(Boolean).join(", ");
-    await sendChat(CHAT_WEBHOOK_RETURNS, `${statusEmoji} *อัปเดตการคืนอุปกรณ์ #${id}*\n━━━━━━━━━━━━━━\n📊 สถานะใหม่: ${newStatus}\n🏷️ อุปกรณ์: ${itemLine || "-"}\n✍️ โดย: ${req.user.name}${req.body.admin_notes ? `\n📝 หมายเหตุ: ${req.body.admin_notes}` : ""}`);
+    await sendChat(CHAT_WEBHOOK_RETURNS, `${statusEmoji} *อัปเดตการคืน #${id}*\n━━━━━━━━━━━━━━\n📊 สถานะ: ${newStatus}\n🏷️ ${itemLine || "-"}\n✍️ โดย: ${req.user.name}${req.body.admin_notes ? `\n📝 ${req.body.admin_notes}` : ""}`);
   }
 
   res.json({ ok: true });
@@ -1186,15 +1280,6 @@ itApi.delete("/returns/:id", itAuth, itRequireRole("admin"), async (req, res) =>
   await dbRun("UPDATE it_returns SET is_deleted=1, updated_at=datetime('now','localtime') WHERE id=?", [id]);
   await itAudit(req.user.id, "RETURN_DELETE", String(id), "");
   res.json({ ok: true });
-});
-
-itApi.get("/returns/stats", itAuth, itRequireRole("admin","agent"), async (req, res) => {
-  const byStatus = await dbAll("SELECT status, COUNT(*) as count FROM it_returns WHERE is_deleted=0 GROUP BY status ORDER BY count DESC");
-  const byCondition = await dbAll("SELECT condition, COUNT(*) as count FROM it_returns WHERE is_deleted=0 AND condition IS NOT NULL AND condition!='' GROUP BY condition ORDER BY count DESC");
-  const monthly = await dbAll("SELECT substr(created_at,1,7) as month, COUNT(*) as count FROM it_returns WHERE is_deleted=0 GROUP BY month ORDER BY month DESC LIMIT 6");
-  const total = await dbGet("SELECT COUNT(*) as c FROM it_returns WHERE is_deleted=0");
-  const pending = await dbGet("SELECT COUNT(*) as c FROM it_returns WHERE is_deleted=0 AND status='PENDING'");
-  res.json({ total: total?.c||0, pending: pending?.c||0, byStatus, byCondition, monthly });
 });
 
 itApi.get("/export/returns.csv", itAuth, itRequireRole("admin","agent"), async (req, res) => {
@@ -1273,7 +1358,7 @@ uniApi.use(async (req, res, next) => {
       success: false,
       message: "DB not ready",
       detail: String(e?.message || e),
-      env: { turso_url_set: !!TURSO_DATABASE_URL, turso_token_set: !!TURSO_AUTH_TOKEN },
+      env: { db_url_set: !!DB_URL, db_token_set: !!DB_TOKEN },
       build_id: BUILD_ID
     });
   }
@@ -1361,7 +1446,54 @@ uniApi.get("/_debug/db", async (req, res) => {
       ping = { ok: false, error: String(e?.message || e) };
     }
   }
-  res.json({ ok: true, db_mode: envOk ? "turso" : "missing_env", ping, build_id: BUILD_ID, build_time: BUILD_TIME });
+  res.json({
+    ok: true,
+    db_mode: envOk ? (isFileUrl(DB_URL) ? "local_file" : "turso") : "missing_env",
+    db_url_set: !!DB_URL,
+    db_token_set: !!DB_TOKEN,
+    ping,
+    build_id: BUILD_ID,
+    build_time: BUILD_TIME
+  });
+});
+
+// Debug: seed/users snapshot (no passwords)
+uniApi.get("/_debug/seed", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    await ensureDbReady();
+    const admin = await dbGet("SELECT username, name, role, department, email, is_approved, is_locked, is_deleted FROM uni_users WHERE username='admin'");
+    const head = await dbGet("SELECT username, name, role, department, email, is_approved, is_locked, is_deleted FROM uni_users WHERE username='head_mkt'");
+    const cnt = await dbGet("SELECT COUNT(*) as c FROM uni_users");
+    res.json({
+      ok: true,
+      users_count: Number(cnt?.c || 0),
+      admin,
+      head_mkt: head,
+      db_mode: hasDbEnv() ? (isFileUrl(DB_URL) ? "local_file" : "turso") : "missing_env",
+      build_id: BUILD_ID,
+      build_time: BUILD_TIME
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: String(e?.message || e), build_id: BUILD_ID });
+  }
+});
+
+
+// Require DB for the remaining Universe API routes
+uniApi.use(async (req, res, next) => {
+  try {
+    await ensureDbReady();
+    return next();
+  } catch (e) {
+    return res.status(500).json({
+      success: false,
+      message: "DB not ready",
+      detail: String(e?.message || e),
+      env: { db_url_set: !!DB_URL, db_token_set: !!DB_TOKEN },
+      build_id: BUILD_ID
+    });
+  }
 });
 
 // Auth
@@ -1383,18 +1515,34 @@ uniApi.post("/login", async (req, res) => {
 
 uniApi.post("/register", async (req, res) => {
   const { username, password, name, department, email } = req.body || {};
+  const u = String(username || "").trim();
   const em = String(email || "").trim().toLowerCase();
-  if (!username || !password || !name || !department || !em) return res.json({ success: false, message: "Missing fields" });
-  const exists = await dbGet("SELECT username FROM uni_users WHERE lower(email)=lower(?)", [em]);
-  if (exists) return res.json({ success: false, message: "Email นี้ถูกใช้แล้ว" });
+  if (!u || !password || !name || !department || !em) return res.json({ success: false, message: "กรุณากรอกข้อมูลให้ครบ" });
+
+  // Check username uniqueness
+  const userExists = await dbGet("SELECT username FROM uni_users WHERE username=?", [u]);
+  if (userExists) return res.json({ success: false, message: "Username นี้ถูกใช้แล้ว" });
+
+  // Check email uniqueness
+  const emailExists = await dbGet("SELECT username FROM uni_users WHERE lower(email)=lower(?)", [em]);
+  if (emailExists) return res.json({ success: false, message: "Email นี้ถูกใช้แล้ว" });
 
   try {
-    await dbRun("INSERT INTO uni_users (username, password, name, email, department, role, is_approved) VALUES (?,?,?,?,?, 'USER', 0)",
-      [String(username).trim(), await hashPassword(password), String(name).trim(), em, String(department).trim()]);
-    await logAction(username, "REGISTER", `dept=${department} email=${em}`);
+    // Auto-approve self registration so users can login immediately
+    await dbRun("INSERT INTO uni_users (username, password, name, email, department, role, is_approved) VALUES (?,?,?,?,?, 'USER', 1)",
+      [u, await hashPassword(password), String(name).trim(), em, String(department).trim()]);
+    await logAction(u, "REGISTER", `dept=${department} email=${em}`);
     res.json({ success: true });
   } catch (e) {
-    res.json({ success: false, message: "Username already exists" });
+    console.error("UNI REGISTER ERROR:", e);
+    const msg = String(e?.message || "");
+    if (msg.includes("UNIQUE") && msg.includes("email")) {
+      res.json({ success: false, message: "Email นี้ถูกใช้แล้ว" });
+    } else if (msg.includes("UNIQUE") || msg.includes("PRIMARY")) {
+      res.json({ success: false, message: "Username นี้ถูกใช้แล้ว" });
+    } else {
+      res.json({ success: false, message: "สมัครไม่สำเร็จ กรุณาลองใหม่" });
+    }
   }
 });
 
@@ -1482,8 +1630,8 @@ uniApi.post("/request", uniUpload.single("image"), async (req, res) => {
   }
 
   await logAction(requester, "CREATE_REQUEST", `${req_type} ${item_name} x${qty}`);
-  const reqTypeLabel = { WITHDRAW: "📤 เบิกอุปกรณ์", BORROW: "🔄 ยืมอุปกรณ์", PURCHASE: "🛒 ขอซื้อ" };
-  await sendChat(CHAT_WEBHOOK_APPROVALS, `${reqTypeLabel[req_type] || "📢"} *คำขอใหม่ #${reqId}*\n━━━━━━━━━━━━━━\n📋 ประเภท: ${req_type}\n📦 รายการ: ${item_name}\n🔢 จำนวน: ${qty}\n👤 ผู้ขอ: ${requester}\n🏢 แผนก: ${department}\n📝 เหตุผล: ${reason || "-"}\n⏳ สถานะ: รอหัวหน้าอนุมัติ\n━━━━━━━━━━━━━━${APP_URL ? `\n🔗 ${APP_URL}/universe/index.html` : ""}`);
+  const _rtLabel = { WITHDRAW: "📤 เบิกอุปกรณ์", BORROW: "🔄 ยืมอุปกรณ์", PURCHASE: "🛒 ขอซื้อ" };
+  await sendChat(CHAT_WEBHOOK_APPROVALS, `${_rtLabel[req_type] || "📢"} *คำขอใหม่ #${reqId}*\n━━━━━━━━━━━━━━\n📋 ประเภท: ${req_type}\n📦 รายการ: ${item_name}\n🔢 จำนวน: ${qty}\n👤 ผู้ขอ: ${requester}\n🏢 แผนก: ${department}\n📝 เหตุผล: ${reason || "-"}\n⏳ สถานะ: รอหัวหน้าอนุมัติ${APP_URL ? `\n🔗 ${APP_URL}/universe/` : ""}`);
 
   try {
     const details = `เลขที่คำขอ: #${reqId}\nประเภท: ${req_type}\nรายการ: ${item_name}\nจำนวน: ${qty}\nผู้ขอ: ${requester} (${department})\nสถานะ: ${statusLabel("PENDING")}\n`;
@@ -1540,7 +1688,7 @@ uniApi.post("/requests/:id/approve", async (req, res) => {
   await dbRun(`UPDATE uni_requests SET status=?, reject_reason=null, approved_at=${appAt}, updated_at=datetime('now','localtime') WHERE id=?`, [next, id]);
   await logAction(actor, "APPROVE", `Request #${id} -> ${next}`);
 
-  await sendChat(CHAT_WEBHOOK_APPROVALS, `✅ *อนุมัติคำขอ #${id}*\n━━━━━━━━━━━━━━\n📦 รายการ: ${r.item_name}\n🔢 จำนวน: ${r.quantity}\n👤 ผู้ขอ: ${r.requester} (${r.department})\n📊 สถานะใหม่: ${statusLabel(next)}\n✍️ อนุมัติโดย: ${actor}`);
+  await sendChat(CHAT_WEBHOOK_APPROVALS, `✅ *อนุมัติคำขอ #${id}*\n━━━━━━━━━━━━━━\n📦 รายการ: ${r.item_name}\n🔢 จำนวน: ${r.quantity}\n👤 ผู้ขอ: ${r.requester} (${r.department})\n📊 สถานะใหม่: ${statusLabel(next)}\n✍️ โดย: ${actor}`);
 
   try {
     const requesterEmail = await uniGetUserEmail(r.requester);
@@ -1623,14 +1771,74 @@ uniApi.post("/borrow_records/:id/return", async (req, res) => {
 
 // Users (IT)
 uniApi.get("/users", uniRequireRole(["IT"]), async (req, res) => {
-  res.json({ success: true, rows: await dbAll("SELECT username, name, role, department, is_approved, is_locked, is_deleted, must_change_password FROM uni_users ORDER BY username") });
+  res.json({
+    success: true,
+    rows: await dbAll("SELECT username, name, email, role, department, is_approved, is_locked, is_deleted, must_change_password FROM uni_users ORDER BY username")
+  });
 });
 uniApi.post("/users/add", uniRequireRole(["IT"]), async (req, res) => {
-  const { username, password, name, role, department, approved } = req.body;
-  await dbRun("INSERT INTO uni_users (username,password,name,role,department,is_approved) VALUES (?,?,?,?,?,?)",
-    [username, await hashPassword(password), name, role || "USER", department || "", approved ? 1 : 0]);
+  const { username, password, name, role, department, approved, email } = req.body || {};
+  const u = String(username || "").trim();
+  const pw = String(password || "");
+  const nm = String(name || u).trim();
+  const dep = String(department || "").trim();
+  const rl = String(role || "USER").trim().toUpperCase();
+  const em = String(email || "").trim().toLowerCase();
+
+  if (!u || !pw) return res.json({ success: false, message: "Missing username/password" });
+
+  const exists = await dbGet("SELECT username FROM uni_users WHERE username=?", [u]);
+  if (exists) return res.json({ success: false, message: "Username already exists" });
+
+  if (em) {
+    const emExists = await dbGet("SELECT username FROM uni_users WHERE lower(email)=lower(?)", [em]);
+    if (emExists) return res.json({ success: false, message: "Email นี้ถูกใช้แล้ว" });
+  }
+
+  await dbRun(
+    "INSERT INTO uni_users (username,password,name,email,role,department,is_approved) VALUES (?,?,?,?,?,?,?)",
+    [u, await hashPassword(pw), nm, em, rl, dep, approved ? 1 : 0]
+  );
   res.json({ success: true });
 });
+uniApi.post("/users/import_csv", uniRequireRole(["IT"]), async (req, res) => {
+  const csv = String(req.body?.csv || "");
+  const lines = csv.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let created = 0, skipped = 0;
+
+  for (const line of lines) {
+    const cols = line.split(",").map(x => x.trim());
+    if (!cols.length) continue;
+    if ((cols[0] || "").toLowerCase() === "username") continue; // header
+
+    const [username, password, name, department, role, email] = cols;
+    if (!username || !password) { skipped++; continue; }
+
+    const u = String(username).trim();
+    const pw = String(password || "");
+    const nm = String(name || u).trim();
+    const dep = String(department || "").trim();
+    const rl = String(role || "USER").trim().toUpperCase();
+    const em = String(email || "").trim().toLowerCase();
+
+    const exists = await dbGet("SELECT username FROM uni_users WHERE username=?", [u]);
+    if (exists) { skipped++; continue; }
+
+    if (em) {
+      const emExists = await dbGet("SELECT username FROM uni_users WHERE lower(email)=lower(?)", [em]);
+      if (emExists) { skipped++; continue; }
+    }
+
+    await dbRun(
+      "INSERT INTO uni_users (username,password,name,email,role,department,is_approved) VALUES (?,?,?,?,?,?,1)",
+      [u, await hashPassword(pw), nm, em, rl, dep]
+    );
+    created++;
+  }
+
+  res.json({ success: true, created, skipped });
+});
+
 uniApi.post("/users/update", uniRequireRole(["IT"]), async (req, res) => {
   await dbRun("UPDATE uni_users SET role=?, is_approved=?, department=?, is_locked=? WHERE username=?",
     [req.body.role, Number(req.body.approved ? 1 : 0), req.body.department || "", Number(req.body.locked ? 1 : 0), req.body.target]);
@@ -1655,17 +1863,41 @@ uniApi.post("/quotas/set", uniRequireRole(["IT"]), async (req, res) => {
 // Reports
 uniApi.get("/reports", uniRequireRole(["IT", "FINANCE", "CEO"]), async (req, res) => {
   const ym = new Date().toISOString().slice(0, 7);
+
+  const total = (await dbGet("SELECT COUNT(*) as c FROM uni_requests WHERE is_deleted=0"))?.c || 0;
+  const pending = (await dbGet("SELECT COUNT(*) as c FROM uni_requests WHERE status='PENDING' AND is_deleted=0"))?.c || 0;
+  const approved = (await dbGet("SELECT COUNT(*) as c FROM uni_requests WHERE status='APPROVED' AND is_deleted=0"))?.c || 0;
+  const rejected = (await dbGet("SELECT COUNT(*) as c FROM uni_requests WHERE status='REJECTED' AND is_deleted=0"))?.c || 0;
+  const activeBorrows = (await dbGet("SELECT COUNT(*) as c FROM uni_borrow_records WHERE returned_at IS NULL"))?.c || 0;
+
+  const total_items = (await dbGet("SELECT COUNT(*) as c FROM uni_items"))?.c || 0;
+  const total_users = (await dbGet("SELECT COUNT(*) as c FROM uni_users WHERE is_deleted=0"))?.c || 0;
+
+  const byStatus = await dbAll("SELECT status, COUNT(*) as count FROM uni_requests WHERE is_deleted=0 GROUP BY status ORDER BY count DESC");
+  const byDept = await dbAll("SELECT department, COUNT(*) as count FROM uni_requests WHERE is_deleted=0 GROUP BY department ORDER BY count DESC");
+  const byType = await dbAll("SELECT req_type, COUNT(*) as count FROM uni_requests WHERE is_deleted=0 GROUP BY req_type ORDER BY count DESC");
+  const quotaUsage = await dbAll(
+    "SELECT department, req_type, SUM(quantity) as used FROM uni_requests WHERE status='APPROVED' AND is_deleted=0 AND substr(created_at,1,7)=? GROUP BY department, req_type ORDER BY department",
+    [ym]
+  );
+
+  // Provide both new + legacy keys (front-compat)
   res.json({
-    success: true, month: ym,
-    total: (await dbGet("SELECT COUNT(*) as c FROM uni_requests WHERE is_deleted=0")).c,
-    pending: (await dbGet("SELECT COUNT(*) as c FROM uni_requests WHERE status='PENDING' AND is_deleted=0")).c,
-    approved: (await dbGet("SELECT COUNT(*) as c FROM uni_requests WHERE status='APPROVED' AND is_deleted=0")).c,
-    rejected: (await dbGet("SELECT COUNT(*) as c FROM uni_requests WHERE status='REJECTED' AND is_deleted=0")).c,
-    activeBorrows: (await dbGet("SELECT COUNT(*) as c FROM uni_borrow_records WHERE returned_at IS NULL")).c,
-    byStatus: await dbAll("SELECT status, COUNT(*) as count FROM uni_requests WHERE is_deleted=0 GROUP BY status ORDER BY count DESC"),
-    byDept: await dbAll("SELECT department, COUNT(*) as count FROM uni_requests WHERE is_deleted=0 GROUP BY department ORDER BY count DESC"),
-    byType: await dbAll("SELECT req_type, COUNT(*) as count FROM uni_requests WHERE is_deleted=0 GROUP BY req_type ORDER BY count DESC"),
-    quotaUsage: await dbAll("SELECT department, req_type, SUM(quantity) as used FROM uni_requests WHERE status='APPROVED' AND is_deleted=0 AND substr(created_at,1,7)=? GROUP BY department, req_type ORDER BY department", [ym])
+    success: true,
+    month: ym,
+
+    // new keys
+    total, pending, approved, rejected, activeBorrows,
+    total_items, total_users,
+    byStatus, byDept, byType, quotaUsage,
+
+    // legacy keys used by older frontend
+    total_requests: total,
+    total_items_legacy: total_items,
+    total_users_legacy: total_users,
+    by_status: byStatus,
+    by_department: byDept,
+    by_type: byType
   });
 });
 

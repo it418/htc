@@ -1,112 +1,56 @@
 <!doctype html>
 <html lang="th">
 <head>
-  <meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500&display=swap" rel="stylesheet">
-  <title>IT Ticket Portal</title>
-  <style>
-    body {
-      margin:0; display:flex; justify-content:center; align-items:center; height:100vh;
-      background:
-        url("bg.png") center/cover no-repeat,
-        radial-gradient(900px 500px at 10% 10%, rgba(37,99,235,0.35), transparent 60%),
-        radial-gradient(900px 500px at 90% 30%, rgba(16,185,129,0.22), transparent 60%),
-        linear-gradient(180deg, #0b1220, #0f172a);
-      font-family:'Kanit', sans-serif;
-    }
-    body::before { content:""; position:fixed; inset:0; background:rgba(255,255,255,0.72); z-index:-1; backdrop-filter: blur(6px); }
-    .card { background:#fff; padding:40px 30px; border-radius:16px; width:330px; box-shadow:0 10px 30px rgba(0,0,0,0.12); text-align:center; border:1px solid #eef2ff; }
-    h2 { font-weight: 500; color: #1e293b; margin-bottom: 22px; letter-spacing:0.2px; }
-    .sub { color:#64748b; font-size:12px; margin-top:-14px; margin-bottom:18px; }
-    input { width:100%; padding:12px; margin:8px 0; border:1px solid #e2e8f0; border-radius:10px; box-sizing:border-box; background: #f8fafc; font-family:'Kanit', sans-serif; font-size:14px; }
-    input:focus{ outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
-    button { width:100%; padding:12px; margin-top:15px; background:#2563eb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight: 500; font-family:'Kanit', sans-serif; font-size:16px; transition:0.2s; }
-    button:hover { background:#1d4ed8; transform: translateY(-1px); }
-    button.outline { background:transparent; border:1px solid #2563eb; color:#2563eb; margin-top: 10px; }
-    button.outline:hover { background: #eff6ff; }
-    a{ color:#2563eb; text-decoration:none; font-size:13px; }
-    a:hover{ text-decoration:underline; }
-  </style>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>IT Support — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Kanit',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:#080d1a;background-image:radial-gradient(ellipse 1000px 500px at 20% 15%,rgba(99,102,241,.18),transparent 60%),radial-gradient(ellipse 800px 400px at 80% 80%,rgba(139,92,246,.10),transparent 60%)}
+.card{width:min(420px,100%);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(20px);border-radius:28px;padding:36px;color:#e2e8f0}
+h1{font-size:24px;font-weight:700;background:linear-gradient(135deg,#a5b4fc,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+p{color:#64748b;font-size:13px;margin-bottom:20px}
+.tabs{display:flex;gap:6px;margin-bottom:20px}.tab{flex:1;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:transparent;color:#94a3b8;font-family:'Kanit',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:.15s;text-align:center}
+.tab.act{background:rgba(99,102,241,.15);color:#a5b4fc;border-color:rgba(99,102,241,.3)}
+.inp{width:100%;border:1.5px solid rgba(255,255,255,.1);border-radius:12px;padding:11px 14px;background:rgba(255,255,255,.04);color:#e2e8f0;font-family:'Kanit',sans-serif;font-size:14px;outline:none;margin-bottom:12px;transition:.15s}
+.inp:focus{border-color:rgba(99,102,241,.5);box-shadow:0 0 0 3px rgba(99,102,241,.1)}.inp::placeholder{color:#475569}
+.btn{width:100%;padding:12px;border:none;border-radius:14px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-family:'Kanit',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(99,102,241,.3)}
+.msg{font-size:13px;margin-top:10px}
+.link{color:#818cf8;text-decoration:none;font-size:12px;display:block;text-align:center;margin-top:12px}
+</style>
 </head>
 <body>
-  <div class="card">
-    <h2 style="margin-top:0;">IT Ticket Portal</h2>
-    <div class="sub">Sign in เพื่อสร้างและติดตาม Ticket</div>
-
-    <input id="name" placeholder="Name (Register only)">
-    <input id="email" placeholder="Email Address">
-    <input id="password" type="password" placeholder="Password">
-
-    <button onclick="login()">Sign In</button>
-    <button class="outline" onclick="register()">Create Account</button>
-
-    <p id="msg" style="color:#ef4444; font-size:13px; margin:14px 0 0;"></p>
-    <p style="margin-top:14px;">
-      <a href="/">← กลับไปหน้าเลือกระบบ</a>
-    </p>
-    <div id="buildInfo" style="color:#64748b;font-size:11px;margin-top:10px;opacity:.85">Build: -</div>
+<div class="card">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <div style="width:44px;height:44px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;box-shadow:0 8px 20px rgba(99,102,241,.3)"><i class="fa-solid fa-headset"></i></div>
+    <div><h1>IT Support Pro</h1><p style="margin:0">ระบบจัดการ Ticket IT</p></div>
   </div>
-
-  <script>
-    async function loadBuildInfo(){
-      try{
-        const r = await fetch("/it/api/version", { cache: "no-store" });
-        const j = await r.json();
-        const el = document.getElementById("buildInfo");
-        if(el){
-          const t = (j.build_time||"").slice(0,19).replace("T"," ");
-          el.innerText = `Build: ${j.build_id || "-"}${t?` (${t})`:""}`;
-        }
-      }catch{}
-    }
-
-    loadBuildInfo();
-
-    if(localStorage.getItem("token")) location.href = "/it";
-
-    async function safeJson(r){
-      const t = await r.text();
-      try { return JSON.parse(t); } catch { return { error: t || "Server error" }; }
-    }
-    async function login() {
-      try{
-        const email=document.getElementById("email").value, password=document.getElementById("password").value;
-        const r = await fetch("/it/api/login", {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({email,password})
-        });
-        const d = await safeJson(r);
-        if(!r.ok) return document.getElementById("msg").innerText = d.error || d.detail || "Login failed";
-        localStorage.setItem("token", d.token);
-        location.href = "/it";
-      }catch(e){
-        document.getElementById("msg").innerText = "Network error: " + (e?.message || e);
-      }
-    }
-
-    async function register() {
-      const name=document.getElementById("name").value,
-            email=document.getElementById("email").value,
-            password=document.getElementById("password").value;
-
-      const r = await fetch("/it/api/register", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({name,email,password})
-      });
-
-      if(r.ok) {
-        document.getElementById("msg").style.color = "#16a34a";
-        document.getElementById("msg").innerText = "Registered! Now Sign In.";
-      } else {
-        const j = await r.json().catch(()=>({}));
-        document.getElementById("msg").style.color = "#ef4444";
-        document.getElementById("msg").innerText = j.error || "Register failed";
-      }
-    }
-  </script>
+  <div class="tabs"><div class="tab act" id="tLogin" onclick="setTab('login')">Login</div><div class="tab" id="tReg" onclick="setTab('register')">Register</div></div>
+  <div id="loginForm">
+    <input class="inp" id="lEmail" placeholder="Email" onkeypress="if(event.key==='Enter')login()">
+    <input class="inp" id="lPass" type="password" placeholder="Password" onkeypress="if(event.key==='Enter')login()">
+    <button class="btn" onclick="login()"><i class="fa-solid fa-rocket"></i> เข้าสู่ระบบ</button>
+    <div class="msg" id="lMsg"></div>
+  </div>
+  <div id="regForm" style="display:none">
+    <input class="inp" id="rName" placeholder="ชื่อ-นามสกุล">
+    <input class="inp" id="rEmail" placeholder="Email">
+    <input class="inp" id="rPass" type="password" placeholder="Password">
+    <button class="btn" onclick="register()"><i class="fa-solid fa-user-plus"></i> สมัครสมาชิก</button>
+    <div class="msg" id="rMsg"></div>
+  </div>
+  <a href="/" class="link"><i class="fa-solid fa-arrow-left"></i> กลับหน้า Portal</a>
+</div>
+<script>
+function setTab(t){document.getElementById("loginForm").style.display=t==="login"?"block":"none";document.getElementById("regForm").style.display=t==="register"?"block":"none";document.getElementById("tLogin").className="tab"+(t==="login"?" act":"");document.getElementById("tReg").className="tab"+(t==="register"?" act":"")}
+async function login(){const e=document.getElementById("lEmail").value.trim(),p=document.getElementById("lPass").value;if(!e||!p){document.getElementById("lMsg").innerHTML='<span style="color:#f87171">กรอกให้ครบ</span>';return}
+  try{const r=await fetch("/it/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:e,password:p})});const j=await r.json();if(j.token){localStorage.setItem("token",j.token);location.href="/it/"}else document.getElementById("lMsg").innerHTML=`<span style="color:#f87171">${j.error||"Login failed"}</span>`}catch(err){document.getElementById("lMsg").innerHTML='<span style="color:#f87171">Network error</span>'}}
+async function register(){const n=document.getElementById("rName").value.trim(),e=document.getElementById("rEmail").value.trim(),p=document.getElementById("rPass").value;if(!n||!e||!p){document.getElementById("rMsg").innerHTML='<span style="color:#f87171">กรอกให้ครบ</span>';return}
+  try{const r=await fetch("/it/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n,email:e,password:p})});const j=await r.json();if(j.token){localStorage.setItem("token",j.token);location.href="/it/"}else if(r.ok&&j.id){document.getElementById("rMsg").innerHTML='<span style="color:#34d399">✅ สมัครสำเร็จ เข้าสู่ระบบ...</span>';document.getElementById("lEmail").value=e;document.getElementById("lPass").value=p;setTimeout(()=>{setTab("login");login()},800)}else document.getElementById("rMsg").innerHTML=`<span style="color:#f87171">${j.error||j.message||"Error"}</span>`}catch(err){document.getElementById("rMsg").innerHTML='<span style="color:#f87171">Network error</span>'}}
+if(localStorage.getItem("token"))location.href="/it/";
+</script>
 </body>
 </html>
