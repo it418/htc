@@ -556,6 +556,94 @@ function showRequestDetail(id, source) {
     }
   }
 
+  // Build approval timeline
+  let timelineHtml = "";
+  const isPurchase = r.req_type === "PURCHASE";
+  const steps = [];
+
+  // Step 1: HEAD
+  steps.push({
+    label: "หัวหน้าแผนก (HEAD)",
+    icon: "fa-user-tie",
+    by: r.head_approved_by,
+    at: r.head_approved_at,
+    done: !!r.head_approved_by,
+    active: r.status === "PENDING"
+  });
+
+  if (isPurchase) {
+    // Step 2: FINANCE
+    steps.push({
+      label: "การเงิน (FINANCE)",
+      icon: "fa-coins",
+      by: r.finance_approved_by,
+      at: r.finance_approved_at,
+      done: !!r.finance_approved_by,
+      active: r.status === "HEAD_APPROVED"
+    });
+    // Step 3: CEO
+    steps.push({
+      label: "ผู้บริหาร (CEO)",
+      icon: "fa-crown",
+      by: r.ceo_approved_by,
+      at: r.ceo_approved_at,
+      done: !!r.ceo_approved_by,
+      active: r.status === "FINANCE_APPROVED"
+    });
+  } else {
+    // Step 2: IT
+    steps.push({
+      label: "ไอที (IT)",
+      icon: "fa-laptop-code",
+      by: r.it_approved_by,
+      at: r.it_approved_at,
+      done: !!r.it_approved_by,
+      active: r.status === "HEAD_APPROVED"
+    });
+  }
+
+  const isRejected = r.status === "REJECTED";
+  const isCancelled = r.status === "CANCELLED";
+
+  timelineHtml = `<div class="detail-item full"><div class="detail-label" style="margin-bottom:8px">ขั้นตอนการอนุมัติ</div><div style="display:flex;flex-direction:column;gap:0">`;
+  steps.forEach((s, idx) => {
+    const isLast = idx === steps.length - 1;
+    let dotColor = "#cbd5e1"; // gray
+    let lineColor = "#e2e8f0";
+    let textColor = "#94a3b8";
+    let statusText = "รอดำเนินการ";
+    if (s.done) {
+      dotColor = "#10b981"; lineColor = "#10b981"; textColor = "#065f46";
+      statusText = `<span style="color:#059669;font-weight:600">✅ อนุมัติโดย ${esc(s.by)}</span><br><span style="color:#64748b;font-size:11px">${(s.at || "").replace("T", " ").slice(0, 19)}</span>`;
+    } else if (isRejected) {
+      dotColor = "#ef4444"; textColor = "#991b1b";
+      statusText = s.active || (!steps.slice(0, idx).every(x => x.done)) ? `<span style="color:#94a3b8">—</span>` : `<span style="color:#94a3b8">—</span>`;
+      // Mark the step where rejection happened
+      const prevAllDone = steps.slice(0, idx).every(x => x.done);
+      if (!s.done && prevAllDone) {
+        dotColor = "#ef4444";
+        statusText = `<span style="color:#dc2626;font-weight:600">❌ ปฏิเสธโดย ${esc(r.rejected_by || "-")}</span>`;
+      } else if (!s.done) {
+        statusText = `<span style="color:#94a3b8">—</span>`;
+      }
+    } else if (s.active) {
+      dotColor = "#f59e0b"; textColor = "#92400e";
+      statusText = `<span style="color:#d97706;font-weight:600">⏳ รออนุมัติ</span>`;
+    }
+
+    timelineHtml += `<div style="display:flex;gap:14px;align-items:stretch;min-height:${isLast ? '44px' : '56px'}">
+      <div style="display:flex;flex-direction:column;align-items:center;width:20px">
+        <div style="width:14px;height:14px;border-radius:50%;background:${dotColor};flex-shrink:0;margin-top:3px;border:2px solid #fff;box-shadow:0 0 0 2px ${dotColor}40"></div>
+        ${!isLast ? `<div style="width:2px;flex:1;background:${s.done ? '#10b981' : '#e2e8f0'};margin:3px 0"></div>` : ''}
+      </div>
+      <div style="flex:1;padding-bottom:${isLast ? '0' : '12px'}">
+        <div style="font-size:13px;font-weight:600;color:${textColor}"><i class="fa-solid ${s.icon}" style="width:16px;font-size:11px"></i> ${s.label}</div>
+        <div style="font-size:12px;margin-top:2px">${statusText}</div>
+      </div>
+    </div>`;
+  });
+  timelineHtml += `</div></div>`;
+
   const html = `<div class="detail-grid">
     <div class="detail-item"><div class="detail-label">เลขที่คำขอ</div><div class="detail-val" style="color:var(--p);font-size:18px;font-weight:700">#${r.id}</div></div>
     <div class="detail-item"><div class="detail-label">ประเภท</div><div class="detail-val">${typeBadge(r.req_type)}</div></div>
@@ -568,6 +656,8 @@ function showRequestDetail(id, source) {
     ${r.reason ? `<div class="detail-divider"></div><div class="detail-item full"><div class="detail-label">เหตุผล / หมายเหตุ</div><div class="detail-val">${esc(r.reason).replace(/\n/g, "<br>")}</div></div>` : ""}
     ${r.reject_reason ? `<div class="detail-item full"><div class="detail-label" style="color:#dc2626">เหตุผลที่ปฏิเสธ</div><div class="detail-val" style="color:#dc2626">${esc(r.reject_reason)}</div></div>` : ""}
     ${imgHtml}
+    <div class="detail-divider"></div>
+    ${timelineHtml}
     <div class="detail-divider"></div>
     <div class="detail-item"><div class="detail-label">วันที่สร้าง</div><div class="detail-val muted" style="font-size:12px">${(r.created_at || "").replace("T", " ").slice(0, 19)}</div></div>
     <div class="detail-item"><div class="detail-label">อัพเดตล่าสุด</div><div class="detail-val muted" style="font-size:12px">${(r.updated_at || "").replace("T", " ").slice(0, 19)}</div></div>

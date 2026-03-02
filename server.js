@@ -479,7 +479,16 @@ async function initDB(client) {
       approved_at DATETIME,
       updated_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      is_deleted INTEGER DEFAULT 0
+      is_deleted INTEGER DEFAULT 0,
+      head_approved_by TEXT,
+      head_approved_at DATETIME,
+      it_approved_by TEXT,
+      it_approved_at DATETIME,
+      finance_approved_by TEXT,
+      finance_approved_at DATETIME,
+      ceo_approved_by TEXT,
+      ceo_approved_at DATETIME,
+      rejected_by TEXT
     );
 
     CREATE TABLE IF NOT EXISTS uni_items (
@@ -532,6 +541,18 @@ async function initDB(client) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // --- Safe migrations for approval tracking columns (existing DBs) ---
+  const _safeAlter = async (sql) => { try { await dbRun(sql); } catch {} };
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN head_approved_by TEXT");
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN head_approved_at DATETIME");
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN it_approved_by TEXT");
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN it_approved_at DATETIME");
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN finance_approved_by TEXT");
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN finance_approved_at DATETIME");
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN ceo_approved_by TEXT");
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN ceo_approved_at DATETIME");
+  await _safeAlter("ALTER TABLE uni_requests ADD COLUMN rejected_by TEXT");
 
   // seed statuses
   const stCount = await dbGet("SELECT COUNT(*) as c FROM ticket_statuses");
@@ -1665,14 +1686,17 @@ uniApi.post("/requests/:id/approve", async (req, res) => {
   if (!r) return res.json({ success: false, message: "Request not found" });
 
   let next = null;
+  let approvalCol = null; // which column pair to update
   if (u.role === "HEAD" && r.status === "PENDING") {
     if (u.department !== r.department) return res.json({ success: false, message: "ไม่มีสิทธิ์อนุมัติข้ามแผนก" });
     next = "HEAD_APPROVED";
+    approvalCol = "head";
   } else if (u.role === "IT" && r.status === "HEAD_APPROVED" && (r.req_type === "WITHDRAW" || r.req_type === "BORROW")) {
     const item = await dbGet("SELECT stock, is_asset, asset_tag FROM uni_items WHERE name=?", [r.item_name]);
     if (!item) return res.json({ success: false, message: "ไม่พบสินค้าในคลัง" });
     if (Number(item.stock) < Number(r.quantity)) return res.json({ success: false, message: "สต็อกไม่พอ" });
     next = "APPROVED";
+    approvalCol = "it";
     await dbRun("UPDATE uni_items SET stock = stock - ? WHERE name = ?", [Number(r.quantity), r.item_name]);
     if (r.req_type === "BORROW") {
       await dbRun("INSERT INTO uni_borrow_records (request_id,item_name,quantity,borrower,department,asset_tag) VALUES (?,?,?,?,?,?)",
@@ -1680,12 +1704,14 @@ uniApi.post("/requests/:id/approve", async (req, res) => {
     }
   } else if (u.role === "FINANCE" && r.status === "HEAD_APPROVED" && r.req_type === "PURCHASE") {
     next = "FINANCE_APPROVED";
+    approvalCol = "finance";
   } else if (u.role === "CEO" && r.status === "FINANCE_APPROVED" && r.req_type === "PURCHASE") {
     next = "APPROVED";
+    approvalCol = "ceo";
   } else return res.status(403).json({ success: false, message: "Forbidden" });
 
   const appAt = (next === "APPROVED") ? "datetime('now','localtime')" : "approved_at";
-  await dbRun(`UPDATE uni_requests SET status=?, reject_reason=null, approved_at=${appAt}, updated_at=datetime('now','localtime') WHERE id=?`, [next, id]);
+  await dbRun(`UPDATE uni_requests SET status=?, reject_reason=null, approved_at=${appAt}, updated_at=datetime('now','localtime'), ${approvalCol}_approved_by=?, ${approvalCol}_approved_at=datetime('now','localtime') WHERE id=?`, [next, actor, id]);
   await logAction(actor, "APPROVE", `Request #${id} -> ${next}`);
 
   await sendChat(CHAT_WEBHOOK_APPROVALS, `✅ *อนุมัติคำขอ #${id}*\n━━━━━━━━━━━━━━\n📦 รายการ: ${r.item_name}\n🔢 จำนวน: ${r.quantity}\n👤 ผู้ขอ: ${r.requester} (${r.department})\n📊 สถานะใหม่: ${statusLabel(next)}\n✍️ โดย: ${actor}`);
@@ -1711,7 +1737,7 @@ uniApi.post("/requests/:id/reject", async (req, res) => {
   if (!u) return res.status(401).json({ success: false });
   const r = await dbGet("SELECT * FROM uni_requests WHERE id=? AND is_deleted=0", [id]);
 
-  await dbRun("UPDATE uni_requests SET status='REJECTED', reject_reason=?, updated_at=datetime('now','localtime') WHERE id=?", [reason, id]);
+  await dbRun("UPDATE uni_requests SET status='REJECTED', reject_reason=?, rejected_by=?, updated_at=datetime('now','localtime') WHERE id=?", [reason, actor, id]);
   await logAction(actor, "REJECT", `Request #${id}`);
 
   await sendChat(CHAT_WEBHOOK_APPROVALS, `❌ *ปฏิเสธคำขอ #${id}*\n━━━━━━━━━━━━━━\n📦 รายการ: ${r ? r.item_name : "-"}\n👤 ผู้ขอ: ${r ? r.requester : "-"}\n📝 เหตุผล: ${reason || "-"}\n✍️ โดย: ${actor}`);
