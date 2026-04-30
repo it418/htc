@@ -265,6 +265,7 @@ async function createReq(){
   const custom=(document.getElementById("reqCustom").value||"").trim();
   const qty=Math.max(1, Number(document.getElementById("reqQty").value||1));
   const reason=(document.getElementById("reqReason").value||"").trim();
+  const price=Math.max(0, Number(document.getElementById("reqPrice").value||0));
   const days=Math.max(1, Number(document.getElementById("reqDays").value||7));
   const link=(document.getElementById("reqLink").value||"").trim();
 
@@ -296,6 +297,7 @@ async function createReq(){
     req_type:type,
     item_name:itemName,
     quantity:qty,
+    price:price,
     reason:finalReason,
     requester:me.username,
     department:me.department,
@@ -306,7 +308,7 @@ async function createReq(){
   const j=await postJson("/request",body);
   if(j.success){
     toast(`\u2705 #${j.id||""} \u2014 \u0e41\u0e08\u0e49\u0e07 Chat \u0e41\u0e25\u0e49\u0e27!`,"success");
-    ["reqCustom","reqReason","reqLink"].forEach(id=>{const e=document.getElementById(id);if(e)e.value=""});
+    ["reqCustom","reqReason","reqLink","reqPrice"].forEach(id=>{const e=document.getElementById(id);if(e)e.value=""});
     document.getElementById("reqItem").value="";
     document.getElementById("reqQty").value="1";
     document.getElementById("reqMsg").innerHTML='<span style="color:#059669">\u2705</span>';
@@ -364,6 +366,7 @@ function exportInboxHistory(){
       "ประเภท": typeTh[r.req_type]||r.req_type,
       "รายการ": r.item_name,
       "จำนวน": r.quantity,
+      "ราคา (บาท)": r.total_cost || 0,
       "ผู้ขอ": r.requester,
       "แผนก": r.department,
       "สถานะ": statusTh[r.status]||r.status,
@@ -732,6 +735,7 @@ function showRequestDetail(id, source) {
     <div class="detail-item"><div class="detail-label">ประเภท</div><div class="detail-val">${typeBadge(r.req_type)}</div></div>
     <div class="detail-item"><div class="detail-label">สถานะ</div><div class="detail-val">${badge(r.status)}</div></div>
     <div class="detail-item"><div class="detail-label">จำนวน</div><div class="detail-val" style="font-size:18px;font-weight:700">${r.quantity}</div></div>
+    <div class="detail-item"><div class="detail-label">ราคา (บาท)</div><div class="detail-val" style="font-size:18px;font-weight:700;color:#059669">${r.total_cost ? Number(r.total_cost).toLocaleString("th-TH",{minimumFractionDigits:2}) : "-"}</div></div>
     <div class="detail-divider"></div>
     <div class="detail-item full"><div class="detail-label">รายการ</div><div class="detail-val" style="font-size:15px">${esc(r.item_name)}</div></div>
     <div class="detail-item"><div class="detail-label">ผู้ขอ</div><div class="detail-val"><i class="fa-solid fa-user" style="color:#64748b;font-size:11px"></i> ${esc(r.requester || "-")}</div></div>

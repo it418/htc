@@ -185,6 +185,7 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f0fdf4!important}
     <div class="form-row"><div><div class="label">ประเภท</div><select id="reqType" onchange="onTypeChange()"><option value="WITHDRAW">📤 เบิก (Withdraw)</option><option value="BORROW">🔄 ยืม (Borrow)</option><option value="PURCHASE">🛒 ขอซื้อ (Purchase)</option></select></div><div><div class="label">รายการ</div><select id="reqItem"><option value="">-- เลือกจากคลัง --</option></select></div></div>
     <div id="customNameBox"><div class="label">ชื่อรายการ (กรณีไม่มีในคลัง)</div><input id="reqCustom" placeholder="เช่น Keyboard Mechanical"></div>
     <div class="form-row"><div><div class="label">จำนวน</div><input id="reqQty" type="number" min="1" value="1"></div><div id="borrowDaysBox" style="display:none"><div class="label">ระยะยืม (วัน)</div><input id="reqDays" type="number" min="1" value="7"></div></div>
+    <div class="label">ราคา (บาท)</div><input id="reqPrice" type="number" min="0" step="0.01" placeholder="0.00">
     <div class="label">เหตุผล</div><textarea id="reqReason" rows="3" placeholder="อธิบายเหตุผล..."></textarea>
     <div class="label">ลิงก์แนบ (ถ้ามี)</div><input id="reqLink" placeholder="https://...">
     <div style="display:flex;gap:10px;margin-top:14px;align-items:center"><button class="btn" onclick="createReq()"><i class="fa-solid fa-paper-plane"></i> ส่งคำขอ</button><span id="reqMsg" style="font-size:13px"></span></div>

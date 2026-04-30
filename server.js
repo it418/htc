@@ -1622,8 +1622,9 @@ uniApi.get("/requests", async (req, res) => {
 
 // Create request (image upload OR link)
 uniApi.post("/request", uniUpload.single("image"), async (req, res) => {
-  const { req_type, item_name, quantity, reason, requester, department, image_url } = req.body || {};
+  const { req_type, item_name, quantity, reason, requester, department, image_url, price } = req.body || {};
   const qty = Number(quantity || 0);
+  const totalCost = Number(price || 0);
   if (!req_type || !requester || !department || !qty || qty <= 0) return res.json({ success: false, message: "ข้อมูลไม่ครบ" });
 
   // quota check
@@ -1637,8 +1638,8 @@ uniApi.post("/request", uniUpload.single("image"), async (req, res) => {
   }
 
   const ins = await dbRun(
-    "INSERT INTO uni_requests (req_type,item_name,quantity,reason,image_url,requester,department,status,updated_at) VALUES (?,?,?,?,?,?,?,'PENDING',datetime('now','localtime'))",
-    [req_type, item_name || "", qty, reason || "", null, requester, department]
+    "INSERT INTO uni_requests (req_type,item_name,quantity,reason,image_url,requester,department,total_cost,status,updated_at) VALUES (?,?,?,?,?,?,?,?,'PENDING',datetime('now','localtime'))",
+    [req_type, item_name || "", qty, reason || "", null, requester, department, totalCost]
   );
   const reqId = ins.lastInsertRowid;
 
@@ -1655,10 +1656,10 @@ uniApi.post("/request", uniUpload.single("image"), async (req, res) => {
 
   await logAction(requester, "CREATE_REQUEST", `${req_type} ${item_name} x${qty}`);
   const _rtLabel = { WITHDRAW: "📤 เบิกอุปกรณ์", BORROW: "🔄 ยืมอุปกรณ์", PURCHASE: "🛒 ขอซื้อ" };
-  await sendChat(CHAT_WEBHOOK_APPROVALS, `${_rtLabel[req_type] || "📢"} *คำขอใหม่ #${reqId}*\n━━━━━━━━━━━━━━\n📋 ประเภท: ${req_type}\n📦 รายการ: ${item_name}\n🔢 จำนวน: ${qty}\n👤 ผู้ขอ: ${requester}\n🏢 แผนก: ${department}\n📝 เหตุผล: ${reason || "-"}\n⏳ สถานะ: รอหัวหน้าอนุมัติ${APP_URL ? `\n🔗 ${APP_URL}/universe/` : ""}`);
+  await sendChat(CHAT_WEBHOOK_APPROVALS, `${_rtLabel[req_type] || "📢"} *คำขอใหม่ #${reqId}*\n━━━━━━━━━━━━━━\n📋 ประเภท: ${req_type}\n📦 รายการ: ${item_name}\n🔢 จำนวน: ${qty}\n💰 ราคา: ${totalCost ? totalCost.toLocaleString() + " บาท" : "-"}\n👤 ผู้ขอ: ${requester}\n🏢 แผนก: ${department}\n📝 เหตุผล: ${reason || "-"}\n⏳ สถานะ: รอหัวหน้าอนุมัติ${APP_URL ? `\n🔗 ${APP_URL}/universe/` : ""}`);
 
   try {
-    const details = `เลขที่คำขอ: #${reqId}\nประเภท: ${req_type}\nรายการ: ${item_name}\nจำนวน: ${qty}\nผู้ขอ: ${requester} (${department})\nสถานะ: ${statusLabel("PENDING")}\n`;
+    const details = `เลขที่คำขอ: #${reqId}\nประเภท: ${req_type}\nรายการ: ${item_name}\nจำนวน: ${qty}\nราคา: ${totalCost ? totalCost.toLocaleString() + " บาท" : "-"}\nผู้ขอ: ${requester} (${department})\nสถานะ: ${statusLabel("PENDING")}\n`;
     const headEmails = await uniGetDeptHeadEmails(department);
     if (headEmails.length) await sendMail(headEmails.join(","), `📩 มีคำขอใหม่ #${reqId} รออนุมัติ`, details);
     const reqEmail = await uniGetUserEmail(requester);
